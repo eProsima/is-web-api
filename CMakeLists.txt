@@ -30,3 +30,5 @@ foreach(resource
     COPYONLY)
     
 endforeach()
+
+execute_process(COMMAND npm install colors WORKING_DIRECTORY ${INSTALL_DIR})

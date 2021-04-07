@@ -33,9 +33,9 @@ var yaml_doc = restart();
 function restart ()
 {
     // Remove the last configuration yaml if exists
-    if (fs.existsSync(outputfile))
+    if (fs.existsSync(home + '/' + outputfile))
     {
-        fs.unlinkSync(outputfile);
+        fs.unlinkSync(home + '/' + outputfile);
     }
 
     // Free all the local variables
@@ -54,7 +54,7 @@ function write_to_file()
 {
     logger.debug(util.inspect(yaml_doc, false, 20, true));
     let yaml_str = YAML.dump(yaml_doc);
-    fs.writeFileSync(outputfile, yaml_str, 'utf8');
+    fs.writeFileSync(home + '/' + outputfile, yaml_str, 'utf8');
 };
 
 module.exports = { 
