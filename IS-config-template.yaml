@@ -2,15 +2,16 @@
 systems:
 {
   ros2: { type: ros2 },
-  ws_client: { type: websocket_client, host: localhost, port: 12345, types-from : ros2,
-      authentication: { 
-          token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoic29zcy13ZWJzb2NrZXQtdGVzdCIsImlhdCI6MTU1NDc5ODg4N30.c7XzL8ytDezkXTuniNi1YEYXOpKj0_Tj2gm0BLn4c4o'
+  ws_server: { type: websocket_server, security: none, host: localhost, port: 12345, types-from : ros2,
+      authentication: 
+      { 
+        policies: [{ secret: is-web-api, algo: HS256 }]
       }
   }
 },
 routes: 
 {
-  websocket_to_ros2: { from: ws_client, to: ros2 },
-  ros2_to_websocket: { from: ros2, to: websocket }
+  websocket_to_ros2: { from: ws_server, to: ros2 },
+  ros2_to_websocket: { from: ros2, to: ws_server }
 }
 }
