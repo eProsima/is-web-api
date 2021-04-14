@@ -23,6 +23,7 @@ file(MAKE_DIRECTORY ${INSTALL_DIR}/${PROJECT_NAME})
 foreach(resource
     configuration.js
     logger.js
+    websocket_client.js
     IS-config-template.yaml)
 
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${resource}
@@ -31,4 +32,4 @@ foreach(resource
     
 endforeach()
 
-execute_process(COMMAND npm install colors WORKING_DIRECTORY ${INSTALL_DIR})
+execute_process(COMMAND npm install colors jsonwebtoken websocket WORKING_DIRECTORY ${INSTALL_DIR})
