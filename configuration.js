@@ -14,14 +14,21 @@
  * limitations under the License.
  */
 
+const events = require('events');
 const logger = require('./logger.js');
+const ws_client = require('./websocket_client.js');
 const YAML = require('js-yaml');
 var fs = require('fs');
 var util = require('util');
+var child_process = require('child_process');
 var home = process.env.HOME;
 var outputfile = 'IS-configuration.yaml'
+var eventEmitter = new events.EventEmitter();
 
-var type_entity_map = {};
+var is_launched = false;
+var error_dict = {};
+var IS = {}; //Integration service process
+var registered_types = [];
 var idl_types = [];
 var topics = {};
 var yaml_doc = restart();
@@ -39,9 +46,10 @@ function restart ()
     }
 
     // Free all the local variables
-    type_entity_map = {};
+    registered_types = [];
     idl_types = [];
     topics = {};
+    error_dict = {};
 
     // Load again the IS configuration template
     return YAML.load(fs.readFileSync("./IS-Web-API/IS-config-template.yaml", 'utf8'));
@@ -57,6 +65,94 @@ function write_to_file()
     fs.writeFileSync(home + '/' + outputfile, yaml_str, 'utf8');
 };
 
+function add_publisher (pub_id, topic_name, type_name)
+{
+    // Checks if the publisher id is registered in the type map
+    if (registered_types.includes(type_name))
+    {
+        //Checks if there is another topic with the same name
+        if (Object.keys(topics).includes(topic_name))
+        {
+            if (topics[topic_name]['route'] === 'ros2_to_websocket')
+            {
+                remap = { ros2: { topic: topic_name }};
+                topic_name = topic_name + "_pub"
+            }
+            else 
+            {
+                var error_msg = "There is another topic with the same name"
+                logger.error(error_msg);
+                return { color: "red", message: error_msg };
+            }
+        }
+        else
+        {
+            topics[topic_name] = { type: type_name, route: 'websocket_to_ros2' };
+
+            // Initialize YAML topics tag only if necessary
+            if(!('topics' in yaml_doc))
+            {
+                yaml_doc['topics'] = {}
+            }
+
+            yaml_doc['topics'] = topics;
+            ws_client.advertise_topic(topic_name, type_name);
+            logger.info("Publication Topic", topic_name, "[", type_name, "] added to YAML");
+            write_to_file();
+        }
+    }
+    else
+    {
+        var error_msg = "The publisher is not connected to a type or is connected to an empty type";
+        error_dict[pub_id] = { data: {entity: 'pub', topic: topic_name, type: type_name}, error: error_msg};
+    }
+
+    return { color: null , message: null }
+};
+
+function add_subscriber(sub_id, topic_name, type_name)
+{
+    // Checks if the subscriber id is registered in the type map
+    if (registered_types.includes(type_name))
+    {
+        var remap = {};
+        //Checks if there is another topic with the same name
+        if (Object.keys(topics).includes(topic_name))
+        {
+            if (topics[topic_name]['route'] === 'websocket_to_ros2')
+            {
+                remap = { ros2: { topic: topic_name }};
+                topic_name = topic_name + "_sub"
+            }
+            else 
+            {
+                var error_msg = "There is another topic with the same name";
+                logger.error(error_msg);
+                return { color: "red", message: error_msg };
+            }
+        }
+
+        topics[topic_name] = { type: type_name, route: 'ros2_to_websocket', remap};
+
+        // Initialize YAML topics tag only if necessary
+        if(!('topics' in yaml_doc))
+        {
+            yaml_doc['topics'] = {}
+        }
+
+        yaml_doc['topics'] = topics;
+        ws_client.subscribe_topic(topic_name, type_name);
+        logger.info("Subscription Topic", topic_name, "[", type_name, "] added to YAML");
+        write_to_file();
+    }
+    else
+    {
+        var error_msg = "The subscriber is not connected to a type or is connected to an empty type"
+        error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name}, error: error_msg};
+    }
+    return { color: null , message: null }
+}
+
 module.exports = { 
     /**
      * @brief Method that registers a custom IDL Type and adds it to the IS YAML configuration file
@@ -64,16 +160,8 @@ module.exports = {
      * @param {String} type_name: String that defines the name associated with the IDL Type
      * @param {String Array} entity_ids: Array containing the ids of the nodes connected to the IDL Type 
      */
-    add_idl_type: (idl, type_name, entity_ids) =>
+    add_idl_type: (idl, type_name) =>
     {
-        // Saves in the map each subsequent wired node with the associated IDL Type Name.
-        // This information will be used later for topics definition, as Node-RED doesn't provide information
-        // about the previous nodes.
-        for (var i = 0; i < entity_ids.length; i++)
-        {
-            type_entity_map[entity_ids[i]] = type_name;
-        }
-
         // Initialize YAML types tag only if necessary
         if (!('types' in yaml_doc))
         {
@@ -87,16 +175,18 @@ module.exports = {
         if (!idl_types.includes(String(idl)))
         {
             idl_types.push(String(idl));
-            logger.info("IDL Type", type_name, "added to YAML");
+            registered_types.push(type_name);
+            logger.info("IDL Type [", type_name, "] added to YAML");
             yaml_doc['types']['idls'] = idl_types;
             write_to_file();
         }
         else
         {
-            var warn_msg = "The type is defined twice";
+            var warn_msg = "The type [" + type_name + "] is defined twice";
             logger.warn(warn_msg);
             return { color: "yellow", message: warn_msg };
         }
+
         return { color: null , message: null }
     },
     /**
@@ -105,7 +195,7 @@ module.exports = {
      * @param {String} type_name: String that states the name of the message withint the ROS2 package that is selected
      * @param {String Array} entity_ids: Array containing the ids of the nodes connected to the ROS2 Type 
      */
-    add_ros2_type: (package_name, type_name, entity_ids) =>
+    add_ros2_type: (package_name, type_name) =>
     {
         var error_msg = "";
         if (!package_name)
@@ -118,13 +208,46 @@ module.exports = {
             error_msg = "The message type is not selected";
             return { color: "red", message: error_msg };
         }
-        // Saves in the map each subsequent wired node with the associated ROS2 Type Name.
-        // This information will be used later for topics definition, as Node-RED doesn't provide information
-        // about the previous nodes.
-        for (var i = 0; i < entity_ids.length; i++)
+
+        if (!registered_types.includes(package_name + '/' + type_name))
         {
-            type_entity_map[entity_ids[i]] = package_name + "/" + type_name;
+            registered_types.push(package_name + '/' + type_name);
+            logger.info("ROS2 Type [", package_name + '/' + type_name, "] registered");
+
+            // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
+            // the pub/sub registration operation is retried
+            Object.keys(error_dict).forEach( id => {
+                if (error_dict[id]['data']['type'] == package_name + '/' + type_name)
+                {
+                    var message = null;
+                    switch(error_dict[id]['data']['entity'])
+                    {
+                        case 'pub':
+                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            if (message['message'] == null)
+                            {
+                                delete error_dict[id];
+                            }
+                            break;
+                        case 'sub':
+                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            if (message['message'] == null)
+                            {
+                                delete error_dict[id];
+                            }
+                            break;
+                    }
+                    
+                }
+            });
         }
+        else
+        {
+            error_msg = "The type [" + package_name + '/' + type_name + "] is registered twice";
+            logger.warn(error_msg);
+            return {color: "yellow", message: error_msg}
+        }
+        
         return { color: null , message: null }
     },
     /**
@@ -132,97 +255,18 @@ module.exports = {
      * @param {String} pub_id: String that states the Node-RED id associated with the publisher node 
      * @param {String} topic_name: String that defines the name of the topic 
      */
-    add_publisher: (pub_id, topic_name) =>
+    add_publisher: (pub_id, topic_name, type_name) =>
     {
-        // Checks if the publisher id is registered in the type map
-        if (Object.keys(type_entity_map).includes(pub_id))
-        {
-            var type_name = type_entity_map[pub_id];
-            //Checks if there is another topic with the same name
-            if (Object.keys(topics).includes(topic_name))
-            {
-                if (topics[topic_name]['route'] === 'ros2_to_websocket')
-                {
-                    remap = { ros2: { topic: topic_name }};
-                    topic_name = topic_name + "_pub"
-                }
-                else 
-                {
-                    var error_msg = "There is another topic with the same name"
-                    logger.error(error_msg);
-                    return { color: "red", message: error_msg };
-                }
-            }
-            else
-            {
-                topics[topic_name] = { type: type_name, route: 'websocket_to_ros2' };
-
-                // Initialize YAML topics tag only if necessary
-                if(!('topics' in yaml_doc))
-                {
-                    yaml_doc['topics'] = {}
-                }
-
-                yaml_doc['topics'] = topics;
-                logger.info("Publication Topic", topic_name, "[", type_name, "] added to YAML");
-                write_to_file();
-            }
-        }
-        else
-        {
-            var error_msg = "The publisher is not connected to a type or is connected to an empty type";
-            logger.error(error_msg);
-            return { color: "red", message: error_msg };
-        }
-        return { color: null , message: null }
+        return add_publisher(pub_id, topic_name, type_name);
     },
     /**
      * @brief Method that registers a subscriber and adds the corresponding topic to the IS YAML configuration file
      * @param {String} sub_id: String that states the Node-RED id associated with the subscriber node 
      * @param {String} topic_name: String that defines the name of the topic 
      */
-    add_subscriber: (sub_id, topic_name) =>
+    add_subscriber: (sub_id, topic_name, type_name) =>
     {
-        // Checks if the subscriber id is registered in the type map
-        if (Object.keys(type_entity_map).includes(sub_id))
-        {
-            var type_name = type_entity_map[sub_id];
-            var remap = {};
-            //Checks if there is another topic with the same name
-            if (Object.keys(topics).includes(topic_name))
-            {
-                if (topics[topic_name]['route'] === 'websocket_to_ros2')
-                {
-                    remap = { ros2: { topic: topic_name }};
-                    topic_name = topic_name + "_sub"
-                }
-                else 
-                {
-                    var error_msg = "There is another topic with the same name";
-                    logger.error(error_msg);
-                    return { color: "red", message: error_msg };
-                }
-            }
-
-            topics[topic_name] = { type: type_name, route: 'ros2_to_websocket', remap};
-
-            // Initialize YAML topics tag only if necessary
-            if(!('topics' in yaml_doc))
-            {
-                yaml_doc['topics'] = {}
-            }
-
-            yaml_doc['topics'] = topics;
-            logger.info("Subscription Topic", topic_name, "[", type_name, "] added to YAML");
-            write_to_file();
-        }
-        else
-        {
-            var error_msg = "The subscriber is not connected to a type or is connected to an empty type"
-            logger.error(error_msg);
-            return { color: "red", message: error_msg };
-        }
-        return { color: null , message: null }
+        return add_subscriber(sub_id, topic_name, type_name);
     },
     /**
      * @brief Method that restarts the configuration phase (for new deploys)
@@ -230,5 +274,56 @@ module.exports = {
     new_config: () =>
     {
         yaml_doc = restart();
+    },
+    /**
+     * @brief Launches a new instance of the Integration Service with the configured YAML 
+     */
+    launch: (node_id) =>
+    {
+        if (!is_launched && Object.keys(error_dict).length == 0 && Object.keys(topics).length > 0)
+        {
+            var conf_yaml = YAML.load(fs.readFileSync(home + '/' + outputfile, 'utf8'));
+            logger.debug(conf_yaml);
+            is_launched = true;
+            IS = child_process.spawn('integration-service', [String(home + '/' + outputfile)], { stdio: 'inherit', detached: true });
+
+            IS.on('error', function(err)
+            {
+                logger.error("There is an error when launching IS:", err.code);
+            });
+
+            logger.info("Integration Service Launched");
+            setTimeout(() => { 
+                ws_client.launch_websocket_client(eventEmitter); 
+            }, 2000); // milliseconds
+        }
+        else if (Object.keys(error_dict).includes(String(node_id)))
+        {
+            logger.error(error_dict[node_id]['error']);
+            return { color: "red" , message: error_dict[node_id]['error'], event_emitter: null };
+        }
+
+        return { color: null , message: null, event_emitter: eventEmitter }
+    },
+    /**
+     * @brief Stops the active Integration Service instance
+     */
+    stop: () =>
+    {
+        if (is_launched)
+        {
+            is_launched = false;
+            logger.info("Integration Service Stopped");
+            child_process.exec('kill -9 ' + IS.pid, { stdio: 'inherit' });
+        }
+    },
+    /**
+     * @brief Functions that sends the data to a specific topic through the websocket client
+     * @param {Sring} topic: String containing the topic where the data must be sent
+     * @param {Object} data: Message to be sent
+     */
+    send_message: (topic, data) =>
+    {
+        ws_client.send_message(topic, data);
     }
 }
