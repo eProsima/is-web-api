@@ -32,4 +32,4 @@ foreach(resource
     
 endforeach()
 
-execute_process(COMMAND npm install colors jsonwebtoken websocket WORKING_DIRECTORY ${INSTALL_DIR})
+execute_process(COMMAND npm install colors jsonwebtoken websocket js-yaml WORKING_DIRECTORY ${INSTALL_DIR})
