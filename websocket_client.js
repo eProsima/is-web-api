@@ -5,7 +5,6 @@ var events = require('events');
 var logger = require('./logger.js');
 var jwt = require('jsonwebtoken');
 var WebSocketClient = require('websocket').client;
-const EventEmitter = require('node:events');
 var client_connection = {};
 var init_info = [];
 
