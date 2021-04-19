@@ -76,6 +76,10 @@ module.exports = {
 
         connect(client, token);
     },
+    reset_init_info: () =>
+    {
+        init_info = [];
+    },
     /**
      * @brief Functions that sends the data to a specific topic through the websocket client
      * @param {Sring} topic: String containing the topic where the data must be sent
