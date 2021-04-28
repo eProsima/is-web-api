@@ -53,7 +53,7 @@ function restart ()
     error_dict = {};
 
     // Load again the IS configuration template
-    return YAML.load(fs.readFileSync("./IS-Web-API/IS-config-template.yaml", 'utf8'));
+    return YAML.load(fs.readFileSync("/usr/lib/IS-Web-API/IS-config-template.yaml", 'utf8'));
 };
 
 /**
