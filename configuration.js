@@ -318,6 +318,10 @@ module.exports = {
                 logger.error("There is an error when launching IS:", err.code);
             });
 
+            IS.on('exit', function () {
+                logger.error('Integration Service exited due to failure');
+            });
+
             logger.info("Integration Service Launched");
             setTimeout(() => { 
                 ws_client.launch_websocket_client(eventEmitter); 
