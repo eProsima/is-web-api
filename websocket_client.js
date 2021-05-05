@@ -57,8 +57,8 @@ module.exports = {
             connection.on('error', function(error) {
                 logger.error("[WebSocket Client] Connection Error: " + error.toString());
             });
-            connection.on('close', function() {
-                logger.warn('[WebSocket Client] Native Connection Closed');
+            connection.on('close', function(code, reason) {
+                logger.warn('[WebSocket Client] Connection Closed [', code, ']:', reason);
             });
 
             // Callback called when a new message is received
