@@ -61,6 +61,7 @@ function restart ()
  */
 function write_to_file()
 {
+    logger.info("[Configuration] Writing YAML to file");
     logger.debug(util.inspect(yaml_doc, false, 20, true));
     let yaml_str = YAML.dump(yaml_doc);
     fs.writeFileSync(home + '/' + outputfile, yaml_str, 'utf8');
@@ -83,7 +84,7 @@ function add_publisher (pub_id, topic_name, type_name)
                 remap = { ros2: { topic: topic_name }};
                 topic_name = topic_name + "_pub"
             }
-            else 
+            else
             {
                 var error_msg = "There is another topic with the same name"
                 logger.error(error_msg);
@@ -92,7 +93,8 @@ function add_publisher (pub_id, topic_name, type_name)
         }
         else
         {
-            topics[topic_name] = { type: type_name, route: 'websocket_to_ros2' };
+            var t = type_name.replace("/", "::msg::");
+            topics[topic_name] = { type: t, route: 'websocket_to_ros2' };
 
             // Initialize YAML topics tag only if necessary
             if(!('topics' in yaml_doc))
@@ -133,7 +135,7 @@ function add_subscriber(sub_id, topic_name, type_name)
                 remap = { ros2: { topic: topic_name }};
                 topic_name = topic_name + "_sub"
             }
-            else 
+            else
             {
                 var error_msg = "There is another topic with the same name";
                 logger.error(error_msg);
@@ -141,7 +143,8 @@ function add_subscriber(sub_id, topic_name, type_name)
             }
         }
 
-        topics[topic_name] = { type: type_name, route: 'ros2_to_websocket', remap};
+        var t = type_name.replace("/", "::msg::");
+        topics[topic_name] = { type: t, route: 'ros2_to_websocket', remap};
 
         // Initialize YAML topics tag only if necessary
         if(!('topics' in yaml_doc))
@@ -162,19 +165,19 @@ function add_subscriber(sub_id, topic_name, type_name)
     return { color: null , message: null }
 }
 
-module.exports = { 
+module.exports = {
     /**
      * @brief Method that registers a custom IDL Type and adds it to the IS YAML configuration file
      * @param {String} idl: String that defines the IDL Type
      * @param {String} type_name: String that defines the name associated with the IDL Type
-     * @param {String Array} entity_ids: Array containing the ids of the nodes connected to the IDL Type 
+     * @param {String Array} entity_ids: Array containing the ids of the nodes connected to the IDL Type
      */
     add_idl_type: (idl, type_name) =>
     {
         // Initialize YAML types tag only if necessary
         if (!('types' in yaml_doc))
         {
-            yaml_doc['types'] = 
+            yaml_doc['types'] =
             {
                 idls: []
             };
@@ -229,6 +232,7 @@ module.exports = {
         if (!registered_types.includes(package_name + '/' + type_name))
         {
             registered_types.push(package_name + '/' + type_name);
+            yaml_doc["systems"]["ros2"]["using"] = registered_types;
             logger.info("ROS2 Type [", package_name + '/' + type_name, "] registered");
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
@@ -254,7 +258,7 @@ module.exports = {
                             }
                             break;
                     }
-                    
+
                 }
             });
         }
@@ -264,13 +268,13 @@ module.exports = {
             logger.warn(error_msg);
             return {color: "yellow", message: error_msg}
         }
-        
+
         return { color: null , message: null }
     },
     /**
      * @brief Method that registers a publisher and adds the corresponding topic to the IS YAML configuration file
-     * @param {String} pub_id: String that states the Node-RED id associated with the publisher node 
-     * @param {String} topic_name: String that defines the name of the topic 
+     * @param {String} pub_id: String that states the Node-RED id associated with the publisher node
+     * @param {String} topic_name: String that defines the name of the topic
      */
     add_publisher: (pub_id, topic_name, type_name) =>
     {
@@ -278,8 +282,8 @@ module.exports = {
     },
     /**
      * @brief Method that registers a subscriber and adds the corresponding topic to the IS YAML configuration file
-     * @param {String} sub_id: String that states the Node-RED id associated with the subscriber node 
-     * @param {String} topic_name: String that defines the name of the topic 
+     * @param {String} sub_id: String that states the Node-RED id associated with the subscriber node
+     * @param {String} topic_name: String that defines the name of the topic
      */
     add_subscriber: (sub_id, topic_name, type_name) =>
     {
@@ -302,14 +306,15 @@ module.exports = {
         connection_dict[wire] = type;
     },
     /**
-     * @brief Launches a new instance of the Integration Service with the configured YAML 
+     * @brief Launches a new instance of the Integration Service with the configured YAML
      */
     launch: (node_id) =>
     {
         if (!is_launched && Object.keys(error_dict).length == 0 && Object.keys(topics).length > 0)
         {
             var conf_yaml = YAML.load(fs.readFileSync(home + '/' + outputfile, 'utf8'));
-            logger.debug(conf_yaml);
+            logger.info("Launching Integration Service");
+            logger.debug(util.inspect(yaml_doc, false, 20, true));
             is_launched = true;
             IS = child_process.spawn('integration-service', [String(home + '/' + outputfile)], { stdio: 'inherit', detached: true });
 
@@ -323,13 +328,13 @@ module.exports = {
             });
 
             logger.info("Integration Service Launched");
-            setTimeout(() => { 
-                ws_client.launch_websocket_client(eventEmitter); 
+            setTimeout(() => {
+                ws_client.launch_websocket_client(eventEmitter);
             }, 2000); // milliseconds
         }
         else if (Object.keys(error_dict).includes(String(node_id)))
         {
-            logger.error(error_dict[node_id]['error']);
+            logger.error(error_dict[node_id]['error'], "TOPIC:",error_dict[node_id]['topic'], "TYPE:", error_dict[node_id]['type']);
             return { color: "red" , message: error_dict[node_id]['error'], event_emitter: null };
         }
 

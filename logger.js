@@ -26,7 +26,7 @@ if (Object.keys(logLevels).includes(log_level))
  * Logger functions to print to console the corresponding message stylish according to its logging level
  */
 module.exports = {
-    error: (...message) => 
+    error: (...message) =>
     {
       if (loggerLevel <= logLevels.error)
       {

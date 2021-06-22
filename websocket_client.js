@@ -18,7 +18,7 @@ module.exports = {
      * @brief Function that starts the execution of the WebSocket Client
      * @param {EventEmitter} eventEmitter: EventEmmitter used to emit and receive events between libraries
      */
-    launch_websocket_client: (eventEmitter) => 
+    launch_websocket_client: (eventEmitter) =>
     {
         var client = new WebSocketClient({
                 tlsOptions: {
@@ -38,7 +38,7 @@ module.exports = {
             if (retries < 10)
             {
                 logger.info("[WebSocket Client] Connection Retry");
-                setTimeout(() => { 
+                setTimeout(() => {
                     connect(client, token);
                 }, 2000);
             }
@@ -85,7 +85,7 @@ module.exports = {
      * @param {Sring} topic: String containing the topic where the data must be sent
      * @param {Object} data: Message to be sent
      */
-    send_message: (topic, data) => 
+    send_message: (topic, data) =>
     {
         var msg = '{"op":"publish","topic":"' + String(topic) + '","msg":' + JSON.stringify(data) + '}';
         client_connection.send(msg);
@@ -97,7 +97,8 @@ module.exports = {
      */
     advertise_topic: (topic, type) =>
     {
-        var msg = '{"op":"advertise","topic":"' + String(topic) + '","type":"' + String(type) + '"}';
+        var t = type.replace("/", "::msg::");
+        var msg = '{"op":"advertise","topic":"' + String(topic) + '","type":"' + String(t) + '"}';
         init_info.push(msg)
     },
     /**
@@ -105,9 +106,10 @@ module.exports = {
      * @param {Sring} topic: String containing the topic name
      * @param {String} type: String containing the type name
      */
-    subscribe_topic: (topic, type) => 
+    subscribe_topic: (topic, type) =>
     {
-        var msg = '{"op":"subscribe","topic":"' + String(topic) + '","type":"' + String(type) + '"}';
+        var t = type.replace("/", "::msg::");
+        var msg = '{"op":"subscribe","topic":"' + String(topic) + '","type":"' + String(t) + '"}';
         init_info.push(msg)
     }
 }
