@@ -34,12 +34,15 @@ var topics = {};
 var yaml_doc = restart();
 var connection_dict = {};
 
+var print_prefix = "[Configuration]";
+
 /**
  * @brief Method that restarts the configuration phase
  * @returns The IS configuration template yaml
  */
 function restart ()
 {
+    logger.info(print_prefix, "YAML restarted.");
     // Remove the last configuration yaml if exists
     if (fs.existsSync(home + '/' + outputfile))
     {
@@ -61,8 +64,8 @@ function restart ()
  */
 function write_to_file()
 {
-    logger.info("[Configuration] Writing YAML to file");
-    logger.debug(util.inspect(yaml_doc, false, 20, true));
+    logger.info(print_prefix, "Writing YAML to file.");
+    logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
     let yaml_str = YAML.dump(yaml_doc);
     fs.writeFileSync(home + '/' + outputfile, yaml_str, 'utf8');
 };
@@ -87,7 +90,7 @@ function add_publisher (pub_id, topic_name, type_name)
             else
             {
                 var error_msg = "There is another topic with the same name"
-                logger.error(error_msg);
+                logger.error(print_prefix, error_msg);
                 return { color: "red", message: error_msg };
             }
         }
@@ -104,13 +107,15 @@ function add_publisher (pub_id, topic_name, type_name)
 
             yaml_doc['topics'] = topics;
             ws_client.advertise_topic(topic_name, type_name);
-            logger.info("Publication Topic", topic_name, "[", type_name, "] added to YAML");
+            logger.info(print_prefix, "Publication Topic", topic_name, "[", type_name, "] added to YAML");
             write_to_file();
         }
     }
     else
     {
-        var error_msg = "The publisher is not connected to a type or is connected to an empty type";
+        logger.debug(print_prefix, "The type is not registered.", registered_types);
+        var error_msg = "The publisher is not connected to a type or is connected to an empty type.";
+        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
         error_dict[pub_id] = { data: {entity: 'pub', topic: topic_name, type: type_name}, error: error_msg};
     }
 
@@ -138,7 +143,7 @@ function add_subscriber(sub_id, topic_name, type_name)
             else
             {
                 var error_msg = "There is another topic with the same name";
-                logger.error(error_msg);
+                logger.error(print_prefix, error_msg);
                 return { color: "red", message: error_msg };
             }
         }
@@ -154,12 +159,14 @@ function add_subscriber(sub_id, topic_name, type_name)
 
         yaml_doc['topics'] = topics;
         ws_client.subscribe_topic(topic_name, type_name);
-        logger.info("Subscription Topic", topic_name, "[", type_name, "] added to YAML");
+        logger.info(print_prefix, "Subscription Topic", topic_name, "[", type_name, "] added to YAML");
         write_to_file();
     }
     else
     {
-        var error_msg = "The subscriber is not connected to a type or is connected to an empty type"
+        logger.debug(print_prefix, "The type is not registered.", registered_types);
+        var error_msg = "The subscriber is not connected to a type or is connected to an empty type.";
+        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
         error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name}, error: error_msg};
     }
     return { color: null , message: null }
@@ -183,19 +190,53 @@ module.exports = {
             };
         }
 
+        if (!('paths' in yaml_doc['types']))
+        {
+            yaml_doc['types']['paths'] = ["/opt/ros/foxy/share"];
+        }
+
         // Checks that the IDL Type is not already added to the YAML
         if (!idl_types.includes(String(idl)))
         {
             idl_types.push(String(idl));
             registered_types.push(type_name);
-            logger.info("IDL Type [", type_name, "] added to YAML");
+            logger.info(print_prefix, "IDL Type [", type_name, "] added to YAML");
             yaml_doc['types']['idls'] = idl_types;
             write_to_file();
+
+            // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
+            // the pub/sub registration operation is retried
+            Object.keys(error_dict).forEach( id => {
+                if (error_dict[id]['data']['type'] == type_name)
+                {
+                    var message = null;
+                    switch(error_dict[id]['data']['entity'])
+                    {
+                        case 'pub':
+                            logger.debug(print_prefix, "Publisher", id, "registration retry.");
+                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            if (message['message'] == null)
+                            {
+                                delete error_dict[id];
+                            }
+                            break;
+                        case 'sub':
+                            logger.debug(print_prefix, "Subscriber", id, "registration retry.");
+                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            if (message['message'] == null)
+                            {
+                                delete error_dict[id];
+                            }
+                            break;
+                    }
+
+                }
+            });
         }
         else
         {
             var warn_msg = "The type [" + type_name + "] is defined twice";
-            logger.warn(warn_msg);
+            logger.warn(print_prefix, warn_msg);
             return { color: "yellow", message: warn_msg };
         }
 
@@ -233,7 +274,7 @@ module.exports = {
         {
             registered_types.push(package_name + '/' + type_name);
             yaml_doc["systems"]["ros2"]["using"] = registered_types;
-            logger.info("ROS2 Type [", package_name + '/' + type_name, "] registered");
+            logger.info(print_prefix, "ROS2 Type [", package_name + '/' + type_name, "] registered");
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
             // the pub/sub registration operation is retried
@@ -244,6 +285,7 @@ module.exports = {
                     switch(error_dict[id]['data']['entity'])
                     {
                         case 'pub':
+                            logger.debug(print_prefix, "Publisher", id, "registration retry.");
                             message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
@@ -251,6 +293,7 @@ module.exports = {
                             }
                             break;
                         case 'sub':
+                            logger.debug(print_prefix, "Subscriber", id, "registration retry.");
                             message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
@@ -265,7 +308,7 @@ module.exports = {
         else
         {
             error_msg = "The type [" + package_name + '/' + type_name + "] is registered twice";
-            logger.warn(error_msg);
+            logger.warn(print_prefix, error_msg);
             return {color: "yellow", message: error_msg}
         }
 
@@ -278,6 +321,7 @@ module.exports = {
      */
     add_publisher: (pub_id, topic_name, type_name) =>
     {
+        logger.debug(print_prefix, "Registering Publisher with: [ID:", pub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
         return add_publisher(pub_id, topic_name, type_name);
     },
     /**
@@ -287,6 +331,7 @@ module.exports = {
      */
     add_subscriber: (sub_id, topic_name, type_name) =>
     {
+        logger.debug(print_prefix, "Registering Subscriber with: [ID:", sub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
         return add_subscriber(sub_id, topic_name, type_name);
     },
     /**
@@ -313,28 +358,33 @@ module.exports = {
         if (!is_launched && Object.keys(error_dict).length == 0 && Object.keys(topics).length > 0)
         {
             var conf_yaml = YAML.load(fs.readFileSync(home + '/' + outputfile, 'utf8'));
-            logger.info("Launching Integration Service");
-            logger.debug(util.inspect(yaml_doc, false, 20, true));
+            logger.info(print_prefix, "Launching Integration Service");
+            logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
             is_launched = true;
             IS = child_process.spawn('integration-service', [String(home + '/' + outputfile)], { stdio: 'inherit', detached: true });
 
             IS.on('error', function(err)
             {
-                logger.error("There is an error when launching IS:", err.code);
+                var error_msg = "There is an error when launching IS:" + err.code;
+                logger.error(print_prefix, error_msg);
+                return { color: "red" , message: error_msg, event_emitter: eventEmitter }
             });
 
             IS.on('exit', function () {
-                logger.error('Integration Service exited due to failure');
+                var error_msg = 'Integration Service exited due to failure.';
+                logger.error(print_prefix, error_msg);
+                return { color: "red" , message: error_msg, event_emitter: eventEmitter }
             });
 
-            logger.info("Integration Service Launched");
+            logger.info(print_prefix, "Integration Service Launched");
             setTimeout(() => {
                 ws_client.launch_websocket_client(eventEmitter);
             }, 2000); // milliseconds
         }
         else if (Object.keys(error_dict).includes(String(node_id)))
         {
-            logger.error(error_dict[node_id]['error'], "TOPIC:",error_dict[node_id]['topic'], "TYPE:", error_dict[node_id]['type']);
+            logger.debug(print_prefix, "Error for entity", node_id , ":", error_dict[node_id]);
+            logger.error(print_prefix, error_dict[node_id]['error'], "=> TOPIC:", error_dict[node_id]['data']['topic'], ", TYPE:", error_dict[node_id]['data']['type']);
             return { color: "red" , message: error_dict[node_id]['error'], event_emitter: null };
         }
 
@@ -348,7 +398,7 @@ module.exports = {
         if (is_launched)
         {
             is_launched = false;
-            logger.info("Integration Service Stopped");
+            logger.info(print_prefix, "Integration Service Stopped");
             child_process.exec('kill -9 ' + IS.pid, { stdio: 'inherit' });
         }
     },
@@ -360,5 +410,9 @@ module.exports = {
     send_message: (topic, data) =>
     {
         ws_client.send_message(topic, data);
+    },
+    get_event_emitter: () =>
+    {
+        return eventEmitter;
     }
 }

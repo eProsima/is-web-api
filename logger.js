@@ -21,7 +21,6 @@ if (Object.keys(logLevels).includes(log_level))
   loggerLevel = logLevels[log_level];
 }
 
-
 /**
  * Logger functions to print to console the corresponding message stylish according to its logging level
  */
@@ -30,25 +29,25 @@ module.exports = {
     {
       if (loggerLevel <= logLevels.error)
       {
-        console.log(colors.red("[ERROR]"), ...message)
+        console.log(colors.red("[IS-Web-API][ERROR]"), ...message);
       }
     },
     warn: (...message) => {
       if (loggerLevel <= logLevels.warn)
       {
-        console.log(colors.yellow("[WARNING]"), ...message)
+        console.log(colors.yellow("[IS-Web-API][WARNING]"), ...message);
       }
     },
     info: (...message) => {
       if (loggerLevel <= logLevels.info)
       {
-        console.log(colors.green("[INFO]"), ...message)
+        console.log(colors.green("[IS-Web-API][INFO]"), ...message);
       }
     },
     debug: (...message) => {
       if (loggerLevel <= logLevels.debug)
       {
-        console.log(colors.blue("[DEBUG]"), ...message)
+        console.log(colors.blue("[IS-Web-API][DEBUG]"), ...message);
       }
-    },
+    }
   };

@@ -40,12 +40,13 @@ module.exports = {
                 logger.info("[WebSocket Client] Connection Retry");
                 setTimeout(() => {
                     connect(client, token);
-                }, 2000);
+                }, 4000);
             }
         });
 
         client.on('connect', function(connection) {
             logger.info('[WebSocket Client] Connected');
+            eventEmitter.emit("websocket_client_connected");
             client_connection = connection;
 
             // Once the websocket client is connected, the init messages are sent
