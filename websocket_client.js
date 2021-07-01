@@ -42,6 +42,10 @@ module.exports = {
                     connect(client, token);
                 }, 4000);
             }
+            else
+            {
+                eventEmitter.emit("websocket_client_connection_failed");
+            }
         });
 
         client.on('connect', function(connection) {
@@ -60,6 +64,7 @@ module.exports = {
             });
             connection.on('close', function(code, reason) {
                 logger.warn('[WebSocket Client] Connection Closed [', code, ']:', reason);
+                eventEmitter.emit("websocket_client_connection_closed");
             });
 
             // Callback called when a new message is received
