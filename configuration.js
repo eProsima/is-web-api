@@ -70,7 +70,40 @@ function write_to_file()
     fs.writeFileSync(home + '/' + outputfile, yaml_str, 'utf8');
 };
 
-function add_publisher (pub_id, topic_name, type_name)
+function get_qos_from_props (config)
+{
+    var qos = { "qos": {}};
+    config.forEach( function(q)
+    {
+        var pos = q.p.indexOf('.');
+        if (pos != -1)
+        {
+            var qos_type = q.p.substr(0, pos);
+            var param = q.p.substr(pos + 1);
+            if (!Object.keys(qos["qos"]).includes(qos_type))
+            {
+                qos["qos"][qos_type] = {};
+            }
+
+            pos = param.indexOf('.');
+            if (pos != -1)
+            {
+                param = param.substr(pos + 1);
+            }
+
+            qos["qos"][qos_type][param] = q.v;
+        }
+        else
+        {
+            qos["qos"][q.p] = q.v;
+        }
+    });
+
+    logger.debug(print_prefix, util.inspect(qos, false, 20, true));
+    return qos;
+};
+
+function add_publisher (pub_id, topic_name, type_name, qos)
 {
     if (Object.keys(connection_dict).includes(pub_id))
     {
@@ -79,6 +112,7 @@ function add_publisher (pub_id, topic_name, type_name)
     // Checks if the publisher id is registered in the type map
     if (registered_types.includes(type_name))
     {
+        var remap = {};
         //Checks if there is another topic with the same name
         if (Object.keys(topics).includes(topic_name))
         {
@@ -97,7 +131,14 @@ function add_publisher (pub_id, topic_name, type_name)
         else
         {
             var t = type_name.replace("/", "::msg::");
-            topics[topic_name] = { type: t, route: 'websocket_to_ros2' };
+            if (qos.length == 0)
+            {
+                topics[topic_name] = { type: t, route: 'websocket_to_ros2', remap };
+            }
+            else
+            {
+                topics[topic_name] = {type: t, route: 'websocket_to_ros2', remap, ros2: get_qos_from_props(qos) }
+            }
 
             // Initialize YAML topics tag only if necessary
             if(!('topics' in yaml_doc))
@@ -115,14 +156,15 @@ function add_publisher (pub_id, topic_name, type_name)
     {
         logger.debug(print_prefix, "The type is not registered.", registered_types);
         var error_msg = "The publisher is not connected to a type or is connected to an empty type.";
-        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
-        error_dict[pub_id] = { data: {entity: 'pub', topic: topic_name, type: type_name}, error: error_msg};
+        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name,
+            "], [Type Name:", type_name, "] and QoS [", qos, "]");
+        error_dict[pub_id] = { data: {entity: 'pub', topic: topic_name, type: type_name, qos: qos}, error: error_msg};
     }
 
     return { color: null , message: null }
 };
 
-function add_subscriber(sub_id, topic_name, type_name)
+function add_subscriber(sub_id, topic_name, type_name, qos)
 {
     if (Object.keys(connection_dict).includes(sub_id))
     {
@@ -149,7 +191,14 @@ function add_subscriber(sub_id, topic_name, type_name)
         }
 
         var t = type_name.replace("/", "::msg::");
-        topics[topic_name] = { type: t, route: 'ros2_to_websocket', remap};
+        if (qos.length == 0)
+        {
+            topics[topic_name] = { type: t, route: 'ros2_to_websocket', remap };
+        }
+        else
+        {
+            topics[topic_name] = {type: t, route: 'ros2_to_websocket', remap, ros2: get_qos_from_props(qos) }
+        }
 
         // Initialize YAML topics tag only if necessary
         if(!('topics' in yaml_doc))
@@ -166,8 +215,9 @@ function add_subscriber(sub_id, topic_name, type_name)
     {
         logger.debug(print_prefix, "The type is not registered.", registered_types);
         var error_msg = "The subscriber is not connected to a type or is connected to an empty type.";
-        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
-        error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name}, error: error_msg};
+        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name,
+            "], [Type Name:", type_name, "] and [QoS:", qos, "]");
+        error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name, qos: qos}, error: error_msg};
     }
     return { color: null , message: null }
 }
@@ -214,7 +264,8 @@ module.exports = {
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
+                                error_dict[id]['data']['qos']);
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -222,7 +273,8 @@ module.exports = {
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
+                                error_dict[id]['data']['qos']);
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -286,7 +338,8 @@ module.exports = {
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
+                                error_dict[id]['data']['qos']);
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -294,7 +347,8 @@ module.exports = {
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
+                                error_dict[id]['data']['qos']);
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -319,20 +373,22 @@ module.exports = {
      * @param {String} pub_id: String that states the Node-RED id associated with the publisher node
      * @param {String} topic_name: String that defines the name of the topic
      */
-    add_publisher: (pub_id, topic_name, type_name) =>
+    add_publisher: (pub_id, topic_name, type_name, qos) =>
     {
-        logger.debug(print_prefix, "Registering Publisher with: [ID:", pub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
-        return add_publisher(pub_id, topic_name, type_name);
+        logger.debug(print_prefix, "Registering Publisher with: [ID:", pub_id, "], [Topic Name:", topic_name,
+             "], [Type Name:", type_name, "] and [QoS:", qos, "]");
+        return add_publisher(pub_id, topic_name, type_name, qos);
     },
     /**
      * @brief Method that registers a subscriber and adds the corresponding topic to the IS YAML configuration file
      * @param {String} sub_id: String that states the Node-RED id associated with the subscriber node
      * @param {String} topic_name: String that defines the name of the topic
      */
-    add_subscriber: (sub_id, topic_name, type_name) =>
+    add_subscriber: (sub_id, topic_name, type_name, qos) =>
     {
-        logger.debug(print_prefix, "Registering Subscriber with: [ID:", sub_id, "], [Topic Name:", topic_name, "] and [Type Name:", type_name, "]");
-        return add_subscriber(sub_id, topic_name, type_name);
+        logger.debug(print_prefix, "Registering Subscriber with: [ID:", sub_id, "], [Topic Name:", topic_name,
+             "], [Type Name:", type_name, "] and [QoS:", qos, "]");
+        return add_subscriber(sub_id, topic_name, type_name, qos);
     },
     /**
      * @brief Method that restarts the configuration phase (for new deploys)
