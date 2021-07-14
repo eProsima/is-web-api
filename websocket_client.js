@@ -75,6 +75,11 @@ module.exports = {
                     if (msg_json['op'] == 'publish')
                     {
                         eventEmitter.emit(msg_json['topic']+ '_data', msg_json);
+
+                        if (msg_json['topic'].includes("_sub"))
+                        {
+                            eventEmitter.emit(msg_json['topic'].replace("_sub", "")+ '_data', msg_json);
+                        }
                     }
                 }
             });
