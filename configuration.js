@@ -32,7 +32,6 @@ var registered_types = [];
 var idl_types = [];
 var topics = {};
 var yaml_doc = restart();
-var connection_dict = {};
 
 var print_prefix = "[Configuration]";
 
@@ -105,10 +104,6 @@ function get_qos_from_props (config)
 
 function add_publisher (pub_id, topic_name, type_name, qos)
 {
-    if (Object.keys(connection_dict).includes(pub_id))
-    {
-        type_name = connection_dict[pub_id];
-    }
     // Checks if the publisher id is registered in the type map
     if (registered_types.includes(type_name))
     {
@@ -166,10 +161,6 @@ function add_publisher (pub_id, topic_name, type_name, qos)
 
 function add_subscriber(sub_id, topic_name, type_name, qos)
 {
-    if (Object.keys(connection_dict).includes(sub_id))
-    {
-        type_name = connection_dict[sub_id];
-    }
     // Checks if the subscriber id is registered in the type map
     if (registered_types.includes(type_name))
     {
@@ -215,7 +206,7 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
     {
         logger.debug(print_prefix, "The type is not registered.", registered_types);
         var error_msg = "The subscriber is not connected to a type or is connected to an empty type.";
-        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name,
+        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", sub_id, "], [Topic Name:", topic_name,
             "], [Type Name:", type_name, "] and [QoS:", qos, "]");
         error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name, qos: qos}, error: error_msg};
     }
@@ -298,18 +289,9 @@ module.exports = {
      * @brief Function that registers the ROS2 Types that are going to be used
      * @param {String} package_name: String that states the name of the ROS2 package selected
      * @param {String} type_name: String that states the name of the message withint the ROS2 package that is selected
-     * @param {Array} wires: Array containing the ids of the nodes connected to the ROS2 Type
      */
-    add_ros2_type: (package_name, type_name, wires) =>
+    add_ros2_type: (package_name, type_name) =>
     {
-        wires.forEach( function(w)
-        {
-            if (!Object.keys(connection_dict).includes(w))
-            {
-                connection_dict[w] = package_name + '/' + type_name;
-            }
-        });
-
         var error_msg = "";
         if (!package_name)
         {
@@ -396,15 +378,6 @@ module.exports = {
     new_config: () =>
     {
         yaml_doc = restart();
-    },
-    register_connection: (type, wire, restart) =>
-    {
-        if (restart === 'true')
-        {
-            connection_dict = {};
-            ws_client.reset_init_info();
-        }
-        connection_dict[wire] = type;
     },
     /**
      * @brief Launches a new instance of the Integration Service with the configured YAML
