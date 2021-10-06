@@ -1,7 +1,7 @@
 {
 systems:
 {
-  ros2: { type: ros2_dynamic, using: [], allow_internal: true },
+  ros2: { type: ros2_dynamic, domain: 0, using: [], allow_internal: true },
   ws_server: { type: websocket_server, security: none, host: localhost, port: 12345, types-from : ros2,
       authentication:
       {
