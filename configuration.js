@@ -35,6 +35,9 @@ var yaml_doc = restart();
 
 var print_prefix = "[Configuration]";
 
+// DDS Domain ID
+var dds_domain = 0;
+
 /**
  * @brief Method that restarts the configuration phase
  * @returns The IS configuration template yaml
@@ -63,6 +66,10 @@ function restart ()
  */
 function write_to_file()
 {
+    // udpate the DDS domain and websocket port 
+    yaml_doc.systems.ws_server.port = ws_client.get_websocket_port();
+    yaml_doc.systems.ros2.domain = dds_domain;
+
     logger.info(print_prefix, "Writing YAML to file.");
     logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
     let yaml_str = YAML.dump(yaml_doc);
@@ -443,5 +450,13 @@ module.exports = {
     get_event_emitter: () =>
     {
         return eventEmitter;
+    },
+    // @brief Set DDS domain
+    set_dds_domain: (id) => {
+        dds_domain = id;
+    },
+    // @brief Get DDS domain
+    get_dds_domain: () => {
+        return dds_domain;
     }
 }

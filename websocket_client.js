@@ -8,9 +8,12 @@ var WebSocketClient = require('websocket').client;
 var client_connection = {};
 var init_info = [];
 
+// WebSocket server random port
+const ws_port = Math.floor(Math.random() * 16383 + 49152);
+
 function connect(client, token)
 {
-    client.connect('ws://localhost:12345', token);
+    client.connect('ws://localhost:' + ws_port, token);
 }
 
 module.exports = {
@@ -121,5 +124,9 @@ module.exports = {
         var t = type.replace("/", "::msg::");
         var msg = '{"op":"subscribe","topic":"' + String(topic) + '","type":"' + String(t) + '"}';
         init_info.push(msg)
+    },
+    // @brief Get WebSocket port
+    get_websocket_port: () => {
+        return ws_port;
     }
 }
