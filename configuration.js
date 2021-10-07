@@ -18,7 +18,10 @@ const events = require('events');
 const logger = require('./logger.js');
 const ws_client = require('./websocket_client.js');
 const YAML = require('js-yaml');
-const tmp = require('tmp'); 
+const proc = require('process');
+const os = require('os');
+let path = require('path');
+
 var fs = require('fs');
 var util = require('util');
 var child_process = require('child_process');
@@ -37,7 +40,10 @@ var print_prefix = "[Configuration]";
 var dds_domain = 0;
 
 // Temporary file
-const outputfile = tmp.fileSync();
+function get_yaml_file()
+{
+    return path.join(os.tmpdir(), 'visual_ros_IS_' + proc.pid + '.yaml');
+}
 
 /**
  * @brief Method that restarts the configuration phase
@@ -47,9 +53,9 @@ function restart ()
 {
     logger.info(print_prefix, "YAML restarted.");
     // Remove the last configuration yaml if exists
-    if (fs.existsSync(outputfile))
+    if (fs.existsSync(get_yaml_file()))
     {
-        fs.unlinkSync(outputfile);
+        fs.unlinkSync(get_yaml_file());
     }
 
     // Free all the local variables
@@ -59,7 +65,7 @@ function restart ()
     error_dict = {};
 
     // Load again the IS configuration template
-    return YAML.load(fs.readFileSync("/usr/lib/IS-Web-API/IS-config-template.yaml", 'utf8'));
+    return YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
 };
 
 /**
@@ -74,7 +80,7 @@ function write_to_file()
     logger.info(print_prefix, "Writing YAML to file.");
     logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
     let yaml_str = YAML.dump(yaml_doc);
-    fs.writeFileSync(outputfile, yaml_str, 'utf8');
+    fs.writeFileSync(get_yaml_file(), yaml_str, 'utf8');
 };
 
 function get_qos_from_props (config)
@@ -394,11 +400,11 @@ module.exports = {
     {
         if (!is_launched && Object.keys(error_dict).length == 0 && Object.keys(topics).length > 0)
         {
-            var conf_yaml = YAML.load(fs.readFileSync(outputfile, 'utf8'));
+            var conf_yaml = YAML.load(fs.readFileSync(get_yaml_file(), 'utf8'));
             logger.info(print_prefix, "Launching Integration Service");
             logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
             is_launched = true;
-            IS = child_process.spawn('integration-service', [String(outputfile)], { stdio: 'inherit', detached: true });
+            IS = child_process.spawn('integration-service', [String(get_yaml_file())], { stdio: 'inherit', detached: true });
 
             IS.on('error', function(err)
             {
