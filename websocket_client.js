@@ -13,7 +13,7 @@ const ws_port = Math.floor(Math.random() * 16383 + 49152);
 
 function connect(client, token)
 {
-    client.connect('ws://localhost:' + ws_port, token);
+    client.connect('ws://localhost:' + ws_port, null, null, { Authorization: 'Bearer ' + token });
 }
 
 module.exports = {
