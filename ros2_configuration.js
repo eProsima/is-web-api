@@ -1,4 +1,4 @@
-/* Copyright 2021, Proyectos y Sistemas de Mantenimiento SL (eProsima).
+/* Copyright 2023, Proyectos y Sistemas de Mantenimiento SL (eProsima).
  * All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,32 +18,22 @@ const events = require('events');
 const logger = require('./logger.js');
 const ws_client = require('./websocket_client.js');
 const YAML = require('js-yaml');
-const proc = require('process');
-const os = require('os');
-let path = require('path');
+const util = require('util');
 
-var fs = require('fs');
-var util = require('util');
-var child_process = require('child_process');
+var launcher = require('./launcher.js')
+
 var eventEmitter = new events.EventEmitter();
-var is_launched = false;
 var error_dict = {};
 var IS = {}; //Integration service process
 var registered_types = [];
 var idl_types = [];
 var topics = {};
-var yaml_doc = restart();
+var yaml_doc = launcher.config;
 
 var print_prefix = "[Configuration]";
 
 // DDS Domain ID
 var dds_domain = 0;
-
-// Temporary file
-function get_yaml_file()
-{
-    return path.join(os.tmpdir(), 'visual_ros_IS_' + proc.pid + '.yaml');
-}
 
 /**
  * @brief Method that restarts the configuration phase
@@ -51,13 +41,6 @@ function get_yaml_file()
  */
 function restart ()
 {
-    logger.info(print_prefix, "YAML restarted.");
-    // Remove the last configuration yaml if exists
-    if (fs.existsSync(get_yaml_file()))
-    {
-        fs.unlinkSync(get_yaml_file());
-    }
-
     // Free all the local variables
     registered_types = [];
     idl_types = [];
@@ -65,7 +48,7 @@ function restart ()
     error_dict = {};
 
     // Load again the IS configuration template
-    return YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
+    launcher.restart()
 };
 
 /**
@@ -79,8 +62,6 @@ function write_to_file()
 
     logger.info(print_prefix, "Writing YAML to file.");
     logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
-    let yaml_str = YAML.dump(yaml_doc);
-    fs.writeFileSync(get_yaml_file(), yaml_str, 'utf8');
 };
 
 function get_qos_from_props (config)
@@ -391,58 +372,39 @@ module.exports = {
      */
     new_config: () =>
     {
-        yaml_doc = restart();
+        restart();
     },
     /**
      * @brief Launches a new instance of the Integration Service with the configured YAML
      */
     launch: (node_id) =>
     {
-        if (!is_launched && Object.keys(error_dict).length == 0 && Object.keys(topics).length > 0)
-        {
-            var conf_yaml = YAML.load(fs.readFileSync(get_yaml_file(), 'utf8'));
-            logger.info(print_prefix, "Launching Integration Service");
-            logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
-            is_launched = true;
-            IS = child_process.spawn('integration-service', [String(get_yaml_file())], { stdio: 'inherit', detached: true });
-
-            IS.on('error', function(err)
-            {
-                var error_msg = "There is an error when launching IS:" + err.code;
-                logger.error(print_prefix, error_msg);
-                return { color: "red" , message: error_msg, event_emitter: eventEmitter }
-            });
-
-            IS.on('exit', function () {
-                var error_msg = 'Integration Service exited due to failure.';
-                logger.error(print_prefix, error_msg);
-                return { color: "red" , message: error_msg, event_emitter: eventEmitter }
-            });
-
-            logger.info(print_prefix, "Integration Service Launched");
-            setTimeout(() => {
-                ws_client.launch_websocket_client(eventEmitter);
-            }, 2000); // milliseconds
-        }
-        else if (Object.keys(error_dict).includes(String(node_id)))
+        if (Object.keys(error_dict).length != 0 || Object.keys(topics).length == 0)
         {
             logger.debug(print_prefix, "Error for entity", node_id , ":", error_dict[node_id]);
             logger.error(print_prefix, error_dict[node_id]['error'], "=> TOPIC:", error_dict[node_id]['data']['topic'], ", TYPE:", error_dict[node_id]['data']['type']);
             return { color: "red" , message: error_dict[node_id]['error'], event_emitter: null };
         }
 
-        return { color: null , message: null, event_emitter: eventEmitter }
+        var res = launcher.launch(node_id, eventEmitter);
+
+        if (res.message === null )
+        {
+            setTimeout(() => {
+                    ws_client.launch_websocket_client(eventEmitter);
+                    }, 2000); // milliseconds
+        }
+
+        return res;
     },
     /**
      * @brief Stops the active Integration Service instance
      */
     stop: () =>
     {
-        if (is_launched)
+        if (launcher.stop())
         {
-            is_launched = false;
             logger.info(print_prefix, "Integration Service Stopped");
-            child_process.exec('kill -9 ' + IS.pid, { stdio: 'inherit' });
         }
     },
     /**

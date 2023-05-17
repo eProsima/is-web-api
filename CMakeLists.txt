@@ -21,7 +21,8 @@ set(INSTALL_DIR /usr/lib)
 file(MAKE_DIRECTORY ${INSTALL_DIR}/${PROJECT_NAME})
 
 foreach(resource
-    configuration.js
+    ros2_configuration.js
+    launcher.js
     logger.js
     websocket_client.js
     IS-config-template.yaml)
