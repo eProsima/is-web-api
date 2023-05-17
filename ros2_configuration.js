@@ -28,7 +28,6 @@ var IS = {}; //Integration service process
 var registered_types = [];
 var idl_types = [];
 var topics = {};
-var yaml_doc = launcher.config;
 
 var print_prefix = "[Configuration]";
 
@@ -42,26 +41,26 @@ var dds_domain = 0;
 function restart ()
 {
     // Free all the local variables
+    error_dict = {};
     registered_types = [];
     idl_types = [];
     topics = {};
-    error_dict = {};
 
     // Load again the IS configuration template
     launcher.restart()
 };
 
 /**
- * @brief Writes the yaml_doc information to file
+ * @brief Prepares global.integration_service_config information for the config file
  */
 function write_to_file()
 {
     // udpate the DDS domain and websocket port 
-    yaml_doc.systems.ws_server.port = ws_client.get_websocket_port();
-    yaml_doc.systems.ros2.domain = dds_domain;
+    global.integration_service_config.systems.ws_server.port = ws_client.get_websocket_port();
+    global.integration_service_config.systems.ros2.domain = dds_domain;
 
     logger.info(print_prefix, "Writing YAML to file.");
-    logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
+    logger.debug(print_prefix, util.inspect(global.integration_service_config, false, 20, true));
 };
 
 function get_qos_from_props (config)
@@ -131,12 +130,12 @@ function add_publisher (pub_id, topic_name, type_name, qos)
             }
 
             // Initialize YAML topics tag only if necessary
-            if(!('topics' in yaml_doc))
+            if(!('topics' in global.integration_service_config))
             {
-                yaml_doc['topics'] = {}
+                global.integration_service_config['topics'] = {}
             }
 
-            yaml_doc['topics'] = topics;
+            global.integration_service_config['topics'] = topics;
             ws_client.advertise_topic(topic_name, type_name);
             logger.info(print_prefix, "Publication Topic", topic_name, "[", type_name, "] added to YAML");
             write_to_file();
@@ -187,12 +186,12 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
         }
 
         // Initialize YAML topics tag only if necessary
-        if(!('topics' in yaml_doc))
+        if(!('topics' in global.integration_service_config))
         {
-            yaml_doc['topics'] = {}
+            global.integration_service_config['topics'] = {}
         }
 
-        yaml_doc['topics'] = topics;
+        global.integration_service_config['topics'] = topics;
         ws_client.subscribe_topic(topic_name, type_name);
         logger.info(print_prefix, "Subscription Topic", topic_name, "[", type_name, "] added to YAML");
         write_to_file();
@@ -218,17 +217,17 @@ module.exports = {
     add_idl_type: (idl, type_name) =>
     {
         // Initialize YAML types tag only if necessary
-        if (!('types' in yaml_doc))
+        if (!('types' in global.integration_service_config))
         {
-            yaml_doc['types'] =
+            global.integration_service_config['types'] =
             {
                 idls: []
             };
         }
 
-        if (!('paths' in yaml_doc['types']))
+        if (!('paths' in global.integration_service_config['types']))
         {
-            yaml_doc['types']['paths'] = ["/opt/ros/foxy/share"];
+            global.integration_service_config['types']['paths'] = ["/opt/ros/foxy/share"];
         }
 
         // Checks that the IDL Type is not already added to the YAML
@@ -237,7 +236,7 @@ module.exports = {
             idl_types.push(String(idl));
             registered_types.push(type_name);
             logger.info(print_prefix, "IDL Type [", type_name, "] added to YAML");
-            yaml_doc['types']['idls'] = idl_types;
+            global.integration_service_config['types']['idls'] = idl_types;
             write_to_file();
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
@@ -302,7 +301,7 @@ module.exports = {
         if (!registered_types.includes(package_name + '/' + type_name))
         {
             registered_types.push(package_name + '/' + type_name);
-            yaml_doc["systems"]["ros2"]["using"] = registered_types;
+            global.integration_service_config["systems"]["ros2"]["using"] = registered_types;
             logger.info(print_prefix, "ROS2 Type [", package_name + '/' + type_name, "] registered");
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered

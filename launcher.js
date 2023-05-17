@@ -24,9 +24,10 @@ const util = require('util');
 
 const logger = require('./logger.js');
 
+global.integration_service_config = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
 var print_prefix = "[Launcher]";
-var yaml_doc = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
-var is_launched = false;
+var is_launched = false; // launch -> stop
+var config_is_reset = true; // launch -> restart
 
 //! Temporary config file
 function get_yaml_file()
@@ -40,26 +41,33 @@ function get_yaml_file()
  */
 function restart ()
 {
-    logger.info(print_prefix, "YAML restarted.");
-    // Remove the last configuration yaml if exists
-    if (fs.existsSync(get_yaml_file()))
+    if (!config_is_reset)
     {
-        fs.unlinkSync(get_yaml_file());
-    }
+        logger.info(print_prefix, "YAML restarted.");
+        // Remove the last configuration yaml if exists
+        if (fs.existsSync(get_yaml_file()))
+        {
+            fs.unlinkSync(get_yaml_file());
+        }
 
-    // Load again the IS configuration template
-    yaml_doc = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
+        // Load again the IS configuration template
+        global.integration_service_config = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
+
+        config_is_reset = true; // already reset for this deployment
+    }
 };
 
 //! launches the actual config in the integration-service
 function launch(node_id, eventEmitter)
 {
+    config_is_reset = false; // the next deployment must reset config
+
     if (!is_launched)
     {
         logger.info(print_prefix, "Launching Integration Service");
-        logger.debug(print_prefix, util.inspect(yaml_doc, false, 20, true));
+        logger.debug(print_prefix, util.inspect(global.integration_service_config, false, 20, true));
         is_launched = true;
-        fs.writeFileSync(get_yaml_file(), YAML.dump(yaml_doc), 'utf8');
+        fs.writeFileSync(get_yaml_file(), YAML.dump(global.integration_service_config), 'utf8');
 
         if (!fs.existsSync(get_yaml_file()))
         {
@@ -86,7 +94,7 @@ function launch(node_id, eventEmitter)
         return { color: "green" , message: null, event_emitter: eventEmitter }
     }
 
-    return { color: "green" , message: null, event_emitter: null }
+    return { color: "green" , message: null, event_emitter: eventEmitter }
 ;
 }
 
@@ -106,7 +114,6 @@ function stop()
 }
 
 module.exports = {
-    config: yaml_doc,
     restart: restart,
     launch: launch,
     stop: stop
