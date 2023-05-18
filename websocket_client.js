@@ -5,45 +5,42 @@ var events = require('events');
 var logger = require('./logger.js');
 var jwt = require('jsonwebtoken');
 var WebSocketClient = require('websocket').client;
-var client_connection = {};
-var init_info = [];
 
-// WebSocket server random port
-const ws_port = Math.floor(Math.random() * 16383 + 49152);
+class WebSocketSHLink {
+    #client;
+    #token;
+    #ws_port;
+    #init_info;
+    #client_connection;
+    
+    constructor(eventEmitter, logger) {
 
-function connect(client, token)
-{
-    client.connect('ws://localhost:' + ws_port, null, null, { Authorization: 'Bearer ' + token });
-}
-
-module.exports = {
-    /**
-     * @brief Function that starts the execution of the WebSocket Client
-     * @param {EventEmitter} eventEmitter: EventEmmitter used to emit and receive events between libraries
-     */
-    launch_websocket_client: (eventEmitter) =>
-    {
-        var client = new WebSocketClient({
+        this.#client = new WebSocketClient({
                 tlsOptions: {
                         rejectUnauthorized: false
                 }
         });
 
-        var retries = 0;
-
         // Generates the JWToken with a specific key
-        var token = jwt.sign({id: 'is-websocket'}, /*Key*/ 'is-web-api');
+        this.#token = jwt.sign({id: 'is-websocket'}, /*Key*/ 'is-web-api');
+        // Randomly generated server port
+        this.#ws_port = Math.floor(Math.random() * 16383 + 49152);
+
+        this.#init_info = [];
+        this.#client_connection = {};
+
+        // Set up events
+        var retries = 0;
+        let pThis = this;
 
         // If the connection fail, it is retried ten times
-        client.on('connectFailed', function(error) {
+        this.#client.on('connectFailed', function(error) {
             logger.error('[WebSocket Client] Connection Failed: ' + error.toString());
             retries++;
             if (retries < 10)
             {
                 logger.info("[WebSocket Client] Connection Retry");
-                setTimeout(() => {
-                    connect(client, token);
-                }, 4000);
+                setTimeout(() => { pThis.#connect();}, 4000);
             }
             else
             {
@@ -51,16 +48,16 @@ module.exports = {
             }
         });
 
-        client.on('connect', function(connection) {
+        this.#client.on('connect', function(connection) {
             logger.info('[WebSocket Client] Connected');
             eventEmitter.emit("websocket_client_connected");
-            client_connection = connection;
+            pThis.#client_connection = connection;
 
             // Once the websocket client is connected, the init messages are sent
-            init_info.forEach(element => {
+            pThis.#init_info.forEach(element => {
                 connection.send(element);
             });
-            init_info = [];
+            pThis.#init_info = [];
 
             connection.on('error', function(error) {
                 logger.error("[WebSocket Client] Connection Error: " + error.toString());
@@ -87,46 +84,46 @@ module.exports = {
             });
         });
 
-        connect(client, token);
-    },
-    reset_init_info: () =>
-    {
-        init_info = [];
-    },
-    /**
-     * @brief Functions that sends the data to a specific topic through the websocket client
-     * @param {Sring} topic: String containing the topic where the data must be sent
-     * @param {Object} data: Message to be sent
-     */
-    send_message: (topic, data) =>
-    {
+        this.#connect();
+    }
+
+    send_message(topic, data) {
         var msg = '{"op":"publish","topic":"' + String(topic) + '","msg":' + JSON.stringify(data) + '}';
-        client_connection.send(msg);
-    },
-    /**
-     * @brief Functions that registers a topic advertisement to send it when the websocket client is connected to IS
-     * @param {Sring} topic: String containing the topic name
-     * @param {String} type: String containing the type name
-     */
-    advertise_topic: (topic, type) =>
-    {
+        this.#client_connection.send(msg);
+    }
+
+    advertise_topic(topic, type) {
         var t = type.replace("/", "::msg::");
         var msg = '{"op":"advertise","topic":"' + String(topic) + '","type":"' + String(t) + '"}';
-        init_info.push(msg)
-    },
-    /**
-     * @brief Functions that registers a topic subscription to send it when the websocket client is connected to IS
-     * @param {Sring} topic: String containing the topic name
-     * @param {String} type: String containing the type name
-     */
-    subscribe_topic: (topic, type) =>
-    {
+        this.#init_info.push(msg);
+    }
+
+    subscribe_topic(topic, type) {
         var t = type.replace("/", "::msg::");
         var msg = '{"op":"subscribe","topic":"' + String(topic) + '","type":"' + String(t) + '"}';
-        init_info.push(msg)
-    },
-    // @brief Get WebSocket port
-    get_websocket_port: () => {
-        return ws_port;
+        this.#init_info.push(msg);
+    }
+
+    get websocket_port() {
+        return this.#ws_port;
+    }
+
+    abort() {
+        this.#client.abort();
+    }
+
+    #connect() {
+        this.#client.connect('ws://localhost:' + this.#ws_port, null, null, { Authorization: 'Bearer ' + this.#token });
+    }
+}
+
+module.exports = {
+    /**
+     * @brief Function that starts the execution of the WebSocket Client
+     * @param {EventEmitter} eventEmitter: EventEmmitter used to emit and receive events between libraries
+     */
+    launch_websocket_client: (eventEmitter) =>
+    {
+        return new WebSocketSHLink(eventEmitter, logger);
     }
 }

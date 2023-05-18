@@ -16,13 +16,15 @@
 
 const events = require('events');
 const logger = require('./logger.js');
-const ws_client = require('./websocket_client.js');
+const websocketclient = require('./websocket_client.js');
 const YAML = require('js-yaml');
 const util = require('util');
 
 var launcher = require('./launcher.js')
 
 var eventEmitter = new events.EventEmitter();
+var ws_client = websocketclient.launch_websocket_client(eventEmitter);
+
 var error_dict = {};
 var IS = {}; //Integration service process
 var registered_types = [];
@@ -56,7 +58,7 @@ function restart ()
 function write_to_file()
 {
     // udpate the DDS domain and websocket port 
-    global.integration_service_config.systems.ws_server.port = ws_client.get_websocket_port();
+    global.integration_service_config.systems.ws_server.port = ws_client.websocket_port;
     global.integration_service_config.systems.ros2.domain = dds_domain;
 
     logger.info(print_prefix, "Writing YAML to file.");
@@ -372,6 +374,13 @@ module.exports = {
     new_config: () =>
     {
         restart();
+
+        // create a new websocket client
+        if (ws_client === null)
+        {
+            logger.info(print_prefix, "ROS2 config websocket client initialized");
+            ws_client = websocketclient.launch_websocket_client(eventEmitter);
+        }
     },
     /**
      * @brief Launches a new instance of the Integration Service with the configured YAML
@@ -385,16 +394,7 @@ module.exports = {
             return { color: "red" , message: error_dict[node_id]['error'], event_emitter: null };
         }
 
-        var res = launcher.launch(node_id, eventEmitter);
-
-        if (res.message === null )
-        {
-            setTimeout(() => {
-                    ws_client.launch_websocket_client(eventEmitter);
-                    }, 2000); // milliseconds
-        }
-
-        return res;
+        return launcher.launch(node_id, eventEmitter);
     },
     /**
      * @brief Stops the active Integration Service instance
@@ -404,6 +404,13 @@ module.exports = {
         if (launcher.stop())
         {
             logger.info(print_prefix, "Integration Service Stopped");
+        }
+
+        // reset websocket client
+        if (ws_client != null)
+        {
+            ws_client.abort();
+            ws_client = null;
         }
     },
     /**
