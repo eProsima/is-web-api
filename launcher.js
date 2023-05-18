@@ -15,16 +15,16 @@
  */
 
 const fs = require('fs');
+const path = require('path');
 const proc = require('process');
 const os = require('os');
 const child_process = require('child_process');
-const path = require('path');
 const YAML = require('js-yaml');
 const util = require('util');
 
 const logger = require('./logger.js');
 
-global.integration_service_config = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
+global.integration_service_config = {systems:{}, routes:{}};
 var print_prefix = "[Launcher]";
 var is_launched = false; // launch -> stop
 var config_is_reset = true; // launch -> restart
@@ -51,7 +51,7 @@ function restart ()
         }
 
         // Load again the IS configuration template
-        global.integration_service_config = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-template.yaml'),'utf8'));
+        global.integration_service_config = {systems:{}, routes:{}};
 
         config_is_reset = true; // already reset for this deployment
     }

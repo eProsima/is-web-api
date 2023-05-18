@@ -1,0 +1,17 @@
+{
+systems:
+{
+  ros2: { type: ros2_dynamic, domain: 0, using: [], allow_internal: true },
+  ws_server_for_ros2: { type: websocket_server, security: none, host: localhost, port: 12345, types-from : ros2,
+      authentication:
+      {
+        policies: [{ secret: is-web-api, algo: HS256 }]
+      }
+  }
+},
+routes:
+{
+  websocket_to_ros2: { from: ws_server_for_ros2, to: ros2 },
+  ros2_to_websocket: { from: ros2, to: ws_server_for_ros2 },
+}
+}

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+const fs = require('fs');
+const path = require('path');
 const events = require('events');
 const logger = require('./logger.js');
 const websocketclient = require('./websocket_client.js');
@@ -23,7 +25,7 @@ const util = require('util');
 var launcher = require('./launcher.js')
 
 var eventEmitter = new events.EventEmitter();
-var ws_client = websocketclient.launch_websocket_client(eventEmitter);
+var ws_client = null;
 
 var error_dict = {};
 var IS = {}; //Integration service process
@@ -55,10 +57,26 @@ function restart ()
 /**
  * @brief Prepares global.integration_service_config information for the config file
  */
-function write_to_file()
+function update_yaml_config()
 {
+    // merge the ros2 template if necessary
+    if (global.integration_service_config.systems.ros2 === undefined)
+    {
+        let ros2 = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-ros2-template.yaml'),'utf8'));
+
+        global.integration_service_config = {
+            systems: {...ros2.systems, ...global.integration_service_config.systems},
+            routes: {...ros2.routes, ...global.integration_service_config.routes}
+        };
+    }
+
     // udpate the DDS domain and websocket port 
-    global.integration_service_config.systems.ws_server.port = ws_client.websocket_port;
+    if (ws_client === null)
+    {
+        log.error(print_prefix, "The socket connection is not established");
+    }
+
+    global.integration_service_config.systems.ws_server_for_ros2.port = ws_client.websocket_port;
     global.integration_service_config.systems.ros2.domain = dds_domain;
 
     logger.info(print_prefix, "Writing YAML to file.");
@@ -138,10 +156,15 @@ function add_publisher (pub_id, topic_name, type_name, qos)
             }
 
             global.integration_service_config['topics'] = topics;
+            if(ws_client === null)
+            {
+                log.error(print_prefix, "The socket connection is not established");
+            }
             ws_client.advertise_topic(topic_name, type_name);
             logger.info(print_prefix, "Publication Topic", topic_name, "[", type_name, "] added to YAML");
-            write_to_file();
         }
+        update_yaml_config();
+
     }
     else
     {
@@ -194,9 +217,13 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
         }
 
         global.integration_service_config['topics'] = topics;
+        if (ws_client === null)
+        {
+            log.error(print_prefix, "The socket connection is not established");
+        }
         ws_client.subscribe_topic(topic_name, type_name);
         logger.info(print_prefix, "Subscription Topic", topic_name, "[", type_name, "] added to YAML");
-        write_to_file();
+        update_yaml_config();
     }
     else
     {
@@ -235,11 +262,12 @@ module.exports = {
         // Checks that the IDL Type is not already added to the YAML
         if (!idl_types.includes(String(idl)))
         {
+            update_yaml_config();
+
             idl_types.push(String(idl));
             registered_types.push(type_name);
             logger.info(print_prefix, "IDL Type [", type_name, "] added to YAML");
             global.integration_service_config['types']['idls'] = idl_types;
-            write_to_file();
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
             // the pub/sub registration operation is retried
@@ -302,6 +330,8 @@ module.exports = {
 
         if (!registered_types.includes(package_name + '/' + type_name))
         {
+            update_yaml_config();
+
             registered_types.push(package_name + '/' + type_name);
             global.integration_service_config["systems"]["ros2"]["using"] = registered_types;
             logger.info(print_prefix, "ROS2 Type [", package_name + '/' + type_name, "] registered");
@@ -369,18 +399,27 @@ module.exports = {
         return add_subscriber(sub_id, topic_name, type_name, qos);
     },
     /**
-     * @brief Method that restarts the configuration phase (for new deploys)
+     * @brief Method that launches the websocket connection if broken
      */
-    new_config: () =>
+    start_websocket: () =>
     {
-        restart();
-
         // create a new websocket client
         if (ws_client === null)
         {
             logger.info(print_prefix, "ROS2 config websocket client initialized");
             ws_client = websocketclient.launch_websocket_client(eventEmitter);
         }
+    },
+    /**
+     * @brief Method that restarts the configuration phase (for new deploys)
+     */
+    new_config: () =>
+    {
+        restart();
+
+        start_websocket();
+
+        update_yaml_config();
     },
     /**
      * @brief Launches a new instance of the Integration Service with the configured YAML
@@ -407,7 +446,7 @@ module.exports = {
         }
 
         // reset websocket client
-        if (ws_client != null)
+        if (ws_client !== null)
         {
             ws_client.abort();
             ws_client = null;

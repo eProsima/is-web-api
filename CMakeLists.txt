@@ -25,7 +25,9 @@ foreach(resource
     launcher.js
     logger.js
     websocket_client.js
-    IS-config-template.yaml)
+    IS-config-ros2-template.yaml
+    IS-config-fiware-template.yaml
+)
 
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${resource}
     ${INSTALL_DIR}/${PROJECT_NAME}/${resource}
