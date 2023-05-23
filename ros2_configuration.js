@@ -55,6 +55,19 @@ function restart ()
 };
 
 /**
+ * @brief Method that launches the websocket connection if broken
+ */
+function start_websocket ()
+{
+    // create a new websocket client
+    if (ws_client === null)
+    {
+        logger.info(print_prefix, "ROS2 config websocket client initialized");
+        ws_client = websocketclient.launch_websocket_client(eventEmitter);
+    }
+};
+
+/**
  * @brief Prepares global.integration_service_config information for the config file
  */
 function update_yaml_config()
@@ -245,6 +258,8 @@ module.exports = {
      */
     add_idl_type: (idl, type_name) =>
     {
+        start_websocket();
+
         // Initialize YAML types tag only if necessary
         if (!('types' in global.integration_service_config))
         {
@@ -316,6 +331,8 @@ module.exports = {
      */
     add_ros2_type: (package_name, type_name) =>
     {
+        start_websocket();
+
         var error_msg = "";
         if (!package_name)
         {
@@ -383,6 +400,8 @@ module.exports = {
      */
     add_publisher: (pub_id, topic_name, type_name, qos) =>
     {
+        start_websocket();
+
         logger.debug(print_prefix, "Registering Publisher with: [ID:", pub_id, "], [Topic Name:", topic_name,
              "], [Type Name:", type_name, "] and [QoS:", qos, "]");
         return add_publisher(pub_id, topic_name, type_name, qos);
@@ -394,21 +413,11 @@ module.exports = {
      */
     add_subscriber: (sub_id, topic_name, type_name, qos) =>
     {
+        start_websocket();
+
         logger.debug(print_prefix, "Registering Subscriber with: [ID:", sub_id, "], [Topic Name:", topic_name,
              "], [Type Name:", type_name, "] and [QoS:", qos, "]");
         return add_subscriber(sub_id, topic_name, type_name, qos);
-    },
-    /**
-     * @brief Method that launches the websocket connection if broken
-     */
-    start_websocket: () =>
-    {
-        // create a new websocket client
-        if (ws_client === null)
-        {
-            logger.info(print_prefix, "ROS2 config websocket client initialized");
-            ws_client = websocketclient.launch_websocket_client(eventEmitter);
-        }
     },
     /**
      * @brief Method that restarts the configuration phase (for new deploys)
