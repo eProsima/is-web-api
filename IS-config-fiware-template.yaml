@@ -1,6 +1,7 @@
 {
 systems:
 {
+  ros2: { type: ros2_dynamic, domain: 0, using: [], allow_internal: true },
   fiware: { type: fiware, host: "172.18.0.3", port: 1026 },
   ws_server_for_fiware: { type: websocket_server, security: none, host: localhost, port: 12345, types-from : ros2,
       authentication:

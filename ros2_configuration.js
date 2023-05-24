@@ -72,10 +72,16 @@ function start_websocket ()
  */
 function update_yaml_config()
 {
-    // merge the ros2 template if necessary
-    if (global.integration_service_config.systems.ros2 === undefined)
+    // merge the ros2 template if necessary, note ros2 system is in both templates
+    if (global.integration_service_config.systems.ws_server_for_ros2 === undefined)
     {
         let ros2 = YAML.load(fs.readFileSync(path.join(__dirname ,'IS-config-ros2-template.yaml'),'utf8'));
+
+        if (global.integration_service_config.systems.ros2 !== undefined)
+        {
+            // keep other config modules ros2 values (fiware may use ros2 types)
+            ros2.systems.ros2 = global.integration_service_config.systems.ros2;
+        }
 
         global.integration_service_config = {
             systems: {...ros2.systems, ...global.integration_service_config.systems},
