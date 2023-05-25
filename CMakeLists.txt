@@ -20,18 +20,15 @@ set(INSTALL_DIR /usr/lib)
 
 file(MAKE_DIRECTORY ${INSTALL_DIR}/${PROJECT_NAME})
 
-foreach(resource
-    ros2_configuration.js
-    launcher.js
-    logger.js
-    websocket_client.js
-    IS-config-ros2-template.yaml
-    IS-config-fiware-template.yaml
-)
+file(GLOB ISWAPI_RESOURCES "*.js" ".yaml")
+foreach(resource ${ISWAPI_RESOURCES})
 
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${resource}
-    ${INSTALL_DIR}/${PROJECT_NAME}/${resource}
-    COPYONLY)
+    get_filename_component(resource_name "${resource}" NAME)
+
+    configure_file(${resource}
+        ${INSTALL_DIR}/${PROJECT_NAME}/${resource_name}
+        COPYONLY
+    )
     
 endforeach()
 

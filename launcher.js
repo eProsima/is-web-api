@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /* Copyright 2023, Proyectos y Sistemas de Mantenimiento SL (eProsima).
  * All rights reserved.
  *
@@ -14,6 +16,8 @@
  * limitations under the License.
  */
 
+"use strict";
+
 const fs = require('fs');
 const path = require('path');
 const proc = require('process');
@@ -25,6 +29,7 @@ const util = require('util');
 const logger = require('./logger.js');
 
 global.integration_service_config = {systems:{}, routes:{}};
+var IS = {}; //Integration service process
 var print_prefix = "[Launcher]";
 var is_launched = false; // launch -> stop
 var config_is_reset = true; // launch -> restart
