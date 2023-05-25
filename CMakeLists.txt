@@ -20,7 +20,7 @@ set(INSTALL_DIR /usr/lib)
 
 file(MAKE_DIRECTORY ${INSTALL_DIR}/${PROJECT_NAME})
 
-file(GLOB ISWAPI_RESOURCES "*.js" ".yaml")
+file(GLOB ISWAPI_RESOURCES "*.js" "*.yaml")
 foreach(resource ${ISWAPI_RESOURCES})
 
     get_filename_component(resource_name "${resource}" NAME)

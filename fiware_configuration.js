@@ -19,11 +19,11 @@
 
 const fs = require('fs');
 const path = require('path');
-// const events = require('events');
+const events = require('events');
 const logger = require('./logger.js');
 const websocketclient = require('./websocket_client.js');
-// const YAML = require('js-yaml');
-// const util = require('util');
+const YAML = require('js-yaml');
+const util = require('util');
 
 var launcher = require('./launcher.js')
 
@@ -45,8 +45,6 @@ function restart ()
 {
     // Free all the local variables
     error_dict = {};
-    registered_types = [];
-    idl_types = [];
 
     // Load again the IS configuration template
     launcher.restart()
@@ -82,6 +80,7 @@ function update_yaml_config()
         }
 
         global.integration_service_config = {
+            ...global.integration_service_config, 
             systems: {...fiware.systems, ...global.integration_service_config.systems},
             routes: {...fiware.routes, ...global.integration_service_config.routes}
         };
@@ -102,13 +101,105 @@ function update_yaml_config()
 };
 
 
-function add_publisher (pub_id, topic_name, type_name, qos)
+function add_publisher (pub_id, topic_name, type_name)
 {
+    update_yaml_config();
+
+    // Checks if the publisher type is registered in the type map
+    if (global.integration_service_config.systems.ros2.using.includes(type_name)
+        || global.integration_service_config.systems.fiware.using.includes(type_name))
+    {
+        var remap = {};
+        //Checks if there is another topic with the same name
+        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
+        {
+            if (global.integration_service_config.topics.topic_name.route === 'fiware_to_websocket')
+            {
+                remap = { fiware: { topic: topic_name }};
+                topic_name = topic_name + "_pub"
+            }
+            else
+            {
+                var error_msg = "There is another topic with the same name"
+                logger.error(print_prefix, error_msg);
+                return { color: "red", message: error_msg };
+            }
+        }
+        else
+        {
+            var t = type_name.replace("/", "::msg::");
+            global.integration_service_config.topics[topic_name] = { type: t, route: 'websocket_to_fiware', remap };
+
+            if(ws_client === null)
+            {
+                log.error(print_prefix, "The socket connection is not established");
+            }
+            ws_client.advertise_topic(topic_name, type_name);
+            logger.info(print_prefix, "Publication Topic", topic_name, "[", type_name, "] added to YAML");
+        }
+    }
+    else
+    {
+        logger.debug(print_prefix, "The type is not registered.",
+                global.integration_service_config.systems.fiware.using,
+                global.integration_service_config.systems.ros2.using);
+        var error_msg = "The publisher is not connected to a type or is connected to an empty type.";
+        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name,
+            "], [Type Name:", type_name, "]");
+        error_dict[pub_id] = { data: {entity: 'pub', topic: topic_name, type: type_name}, error: error_msg};
+    }
+
+    return { color: null , message: null }
+
 }
 
-function add_subscriber(sub_id, topic_name, type_name, qos)
+function add_subscriber(sub_id, topic_name, type_name)
 {
-    // TODO
+    update_yaml_config();
+
+    // Checks if the subscriber id is registered in the type map
+    if (global.integration_service_config.systems.ros2.using.includes(type_name)
+        || global.integration_service_config.systems.fiware.using.includes(type_name))
+    {
+        var remap = {};
+        //Checks if there is another topic with the same name
+        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
+        {
+            if (global.integration_service_config.topics.topic_name.route === 'websocket_to_fiware')
+            {
+                remap = { fiware: { topic: topic_name }};
+                topic_name = topic_name + "_sub"
+            }
+            else
+            {
+                var error_msg = "There is another topic with the same name";
+                logger.error(print_prefix, error_msg);
+                return { color: "red", message: error_msg };
+            }
+        }
+
+        var t = type_name.replace("/", "::msg::");
+        global.integration_service_config.topics[topic_name] = { type: t, route: 'fiware_to_websocket', remap };
+
+        if (ws_client === null)
+        {
+            log.error(print_prefix, "The socket connection is not established");
+        }
+        ws_client.subscribe_topic(topic_name, type_name);
+        logger.info(print_prefix, "Subscription Topic", topic_name, "[", type_name, "] added to YAML");
+    }
+    else
+    {
+        logger.debug(print_prefix, "The type is not registered.",
+                global.integration_service_config.systems.ros2.using,
+                global.integration_service_config.systems.fiware.using);
+        var error_msg = "The subscriber is not connected to a type or is connected to an empty type.";
+        logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", sub_id, "], [Topic Name:", topic_name,
+            "], [Type Name:", type_name, "]");
+        error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name}, error: error_msg};
+    }
+    return { color: null , message: null }
+
 }
 
 module.exports = {
@@ -126,22 +217,22 @@ module.exports = {
         // Initialize YAML types tag only if necessary
         if (!('types' in global.integration_service_config))
         {
-            global.integration_service_config['types'] =
+            global.integration_service_config.types =
             {
                 idls: []
             };
-        }
+        };
 
-        if (!('paths' in global.integration_service_config['types']))
+        if (!('paths' in global.integration_service_config.types))
         {
-            global.integration_service_config['types']['paths'] = ["/opt/ros/foxy/share"];
+            global.integration_service_config.types.paths = ["/opt/ros/foxy/share"];
         }
 
         // Checks that the IDL Type is not already added to the YAML
-        if (!global.integration_service_config['types']['idls'].includes(String(idl)))
+        if (!global.integration_service_config.types.idls.includes(String(idl)))
         {
-            global.integration_service_config['types']['idls'].push(String(idl));
-            registered_types.push(type_name);
+            global.integration_service_config.types.idls.push(String(idl));
+            global.integration_service_config.systems.fiware.using.push(type_name);
             logger.info(print_prefix, "IDL Type [", type_name, "] added to YAML");
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
@@ -154,8 +245,8 @@ module.exports = {
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                                
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -163,8 +254,7 @@ module.exports = {
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -177,7 +267,6 @@ module.exports = {
         }
 
         return { color: null , message: null }
-
      },
 
     /**
@@ -203,9 +292,9 @@ module.exports = {
             return { color: "red", message: error_msg };
         }
 
-        if (!global.integration_service_config["systems"]["ros2"]["using"].includes(package_name + '/' + type_name))
+        if (!global.integration_service_config.systems.ros2.using.includes(package_name + '/' + type_name))
         {
-            global.integration_service_config["systems"]["ros2"]["using"].push(package_name + '/' + type_name);
+            global.integration_service_config.systems.ros2.using.push(package_name + '/' + type_name);
             logger.info(print_prefix, "ROS2 Type [", package_name + '/' + type_name, "] registered");
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
@@ -218,8 +307,7 @@ module.exports = {
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -227,8 +315,7 @@ module.exports = {
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
                                 delete error_dict[id];
@@ -249,26 +336,26 @@ module.exports = {
      * @param {String} pub_id: String that states the Node-RED id associated with the publisher node
      * @param {String} topic_name: String that defines the name of the topic
      */
-    add_publisher: (pub_id, topic_name, type_name, qos) =>
+    add_publisher: (pub_id, topic_name, type_name) =>
     {
         start_websocket();
 
         logger.debug(print_prefix, "Registering Publisher with: [ID:", pub_id, "], [Topic Name:", topic_name,
-             "], [Type Name:", type_name, "] and [QoS:", qos, "]");
-        return add_publisher(pub_id, topic_name, type_name, qos);
+             "], [Type Name:", type_name, "]");
+        return add_publisher(pub_id, topic_name, type_name);
     },
     /**
      * @brief Method that registers a subscriber and adds the corresponding topic to the IS YAML configuration file
      * @param {String} sub_id: String that states the Node-RED id associated with the subscriber node
      * @param {String} topic_name: String that defines the name of the topic
      */
-    add_subscriber: (sub_id, topic_name, type_name, qos) =>
+    add_subscriber: (sub_id, topic_name, type_name) =>
     {
         start_websocket();
 
         logger.debug(print_prefix, "Registering Subscriber with: [ID:", sub_id, "], [Topic Name:", topic_name,
-             "], [Type Name:", type_name, "] and [QoS:", qos, "]");
-        return add_subscriber(sub_id, topic_name, type_name, qos);
+             "], [Type Name:", type_name, "]");
+        return add_subscriber(sub_id, topic_name, type_name);
     },
     /**
      * @brief Method that restarts the configuration phase (for new deploys)

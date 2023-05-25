@@ -80,8 +80,9 @@ function update_yaml_config()
         }
 
         global.integration_service_config = {
+            ...global.integration_service_config, 
             systems: {...ros2.systems, ...global.integration_service_config.systems},
-            routes: {...ros2.routes, ...global.integration_service_config.routes}
+            routes: {...ros2.routes, ...global.integration_service_config.routes},
         };
     }
 
@@ -136,13 +137,13 @@ function add_publisher (pub_id, topic_name, type_name, qos)
     update_yaml_config();
 
     // Checks if the publisher type is registered in the type map
-    if (global.integration_service_config["systems"]["ros2"]["using"].includes(type_name))
+    if (global.integration_service_config.systems.ros2.using.includes(type_name))
     {
         var remap = {};
         //Checks if there is another topic with the same name
-        if (Object.keys(global.integration_service_config['topics']).includes(topic_name))
+        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
         {
-            if (global.integration_service_config['topics'][topic_name]['route'] === 'ros2_to_websocket')
+            if (global.integration_service_config.topics.topic_name.route === 'ros2_to_websocket')
             {
                 remap = { ros2: { topic: topic_name }};
                 topic_name = topic_name + "_pub"
@@ -159,17 +160,11 @@ function add_publisher (pub_id, topic_name, type_name, qos)
             var t = type_name.replace("/", "::msg::");
             if (qos.length == 0)
             {
-                global.integration_service_config['topics'][topic_name] = { type: t, route: 'websocket_to_ros2', remap };
+                global.integration_service_config.topics[topic_name] = { type: t, route: 'websocket_to_ros2', remap };
             }
             else
             {
-                global.integration_service_config['topics'][topic_name] = {type: t, route: 'websocket_to_ros2', remap, ros2: get_qos_from_props(qos) }
-            }
-
-            // Initialize YAML topics tag only if necessary
-            if(!('topics' in global.integration_service_config))
-            {
-                global.integration_service_config['topics'] = {}
+                global.integration_service_config.topics[topic_name] = {type: t, route: 'websocket_to_ros2', remap, ros2: get_qos_from_props(qos) }
             }
 
             if(ws_client === null)
@@ -182,7 +177,7 @@ function add_publisher (pub_id, topic_name, type_name, qos)
     }
     else
     {
-        logger.debug(print_prefix, "The type is not registered.", global.integration_service_config["systems"]["ros2"]["using"]);
+        logger.debug(print_prefix, "The type is not registered.", global.integration_service_config.systems.ros2.using);
         var error_msg = "The publisher is not connected to a type or is connected to an empty type.";
         logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name,
             "], [Type Name:", type_name, "] and QoS [", qos, "]");
@@ -197,13 +192,13 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
     update_yaml_config();
 
     // Checks if the subscriber id is registered in the type map
-    if (global.integration_service_config["systems"]["ros2"]["using"].includes(type_name))
+    if (global.integration_service_config.systems.ros2.using.includes(type_name))
     {
         var remap = {};
         //Checks if there is another topic with the same name
-        if (Object.keys(global.integration_service_config['topics']).includes(topic_name))
+        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
         {
-            if (global.integration_service_config['topics'][topic_name]['route'] === 'websocket_to_ros2')
+            if (global.integration_service_config.topics.topic_name.route === 'websocket_to_ros2')
             {
                 remap = { ros2: { topic: topic_name }};
                 topic_name = topic_name + "_sub"
@@ -219,17 +214,11 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
         var t = type_name.replace("/", "::msg::");
         if (qos.length == 0)
         {
-            global.integration_service_config['topics'][topic_name] = { type: t, route: 'ros2_to_websocket', remap };
+            global.integration_service_config.topics[topic_name] = { type: t, route: 'ros2_to_websocket', remap };
         }
         else
         {
-            global.integration_service_config['topics'][topic_name] = {type: t, route: 'ros2_to_websocket', remap, ros2: get_qos_from_props(qos) }
-        }
-
-        // Initialize YAML topics tag only if necessary
-        if(!('topics' in global.integration_service_config))
-        {
-            global.integration_service_config['topics'] = {}
+            global.integration_service_config.topics[topic_name] = {type: t, route: 'ros2_to_websocket', remap, ros2: get_qos_from_props(qos) }
         }
 
         if (ws_client === null)
@@ -241,7 +230,7 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
     }
     else
     {
-        logger.debug(print_prefix, "The type is not registered.", global.integration_service_config["systems"]["ros2"]["using"]);
+        logger.debug(print_prefix, "The type is not registered.", global.integration_service_config.systems.ros2.using);
         var error_msg = "The subscriber is not connected to a type or is connected to an empty type.";
         logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", sub_id, "], [Topic Name:", topic_name,
             "], [Type Name:", type_name, "] and [QoS:", qos, "]");
@@ -264,22 +253,22 @@ module.exports = {
         // Initialize YAML types tag only if necessary
         if (!('types' in global.integration_service_config))
         {
-            global.integration_service_config['types'] =
+            global.integration_service_config.types =
             {
                 idls: []
             };
-        }
+        };
 
-        if (!('paths' in global.integration_service_config['types']))
+        if (!('paths' in global.integration_service_config.types))
         {
-            global.integration_service_config['types']['paths'] = ["/opt/ros/foxy/share"];
+            global.integration_service_config.types.paths = ["/opt/ros/foxy/share"];
         }
 
         // Checks that the IDL Type is not already added to the YAML
-        if (!global.integration_service_config['types']['idls'].includes(String(idl)))
+        if (!global.integration_service_config.types.idls.includes(String(idl)))
         {
-            global.integration_service_config['types']['idls'].push(String(idl));
-            global.integration_service_config["systems"]["ros2"]["using"].push(type_name);
+            global.integration_service_config.types.idls.push(String(idl));
+            global.integration_service_config.systems.ros2.using.push(type_name);
             logger.info(print_prefix, "IDL Type [", type_name, "] added to YAML");
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
@@ -339,9 +328,9 @@ module.exports = {
             return { color: "red", message: error_msg };
         }
 
-        if (!global.integration_service_config["systems"]["ros2"]["using"].includes(package_name + '/' + type_name))
+        if (!global.integration_service_config.systems.ros2.using.includes(package_name + '/' + type_name))
         {
-            global.integration_service_config["systems"]["ros2"]["using"].push(package_name + '/' + type_name);
+            global.integration_service_config.systems.ros2.using.push(package_name + '/' + type_name);
             logger.info(print_prefix, "ROS2 Type [", package_name + '/' + type_name, "] registered");
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
@@ -420,7 +409,7 @@ module.exports = {
      */
     launch: (node_id) =>
     {
-        if (Object.keys(error_dict).length != 0 || Object.keys(global.integration_service_config['topics']).length == 0)
+        if (Object.keys(error_dict).length != 0 || Object.keys(global.integration_service_config.topics).length == 0)
         {
             logger.debug(print_prefix, "Error for entity", node_id , ":", error_dict[node_id]);
             logger.error(print_prefix, error_dict[node_id]['error'], "=> TOPIC:", error_dict[node_id]['data']['topic'], ", TYPE:", error_dict[node_id]['data']['type']);

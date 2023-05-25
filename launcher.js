@@ -28,7 +28,7 @@ const util = require('util');
 
 const logger = require('./logger.js');
 
-global.integration_service_config = {systems:{}, routes:{}};
+global.integration_service_config = {systems:{}, routes:{}, topics:{}};
 var IS = {}; //Integration service process
 var print_prefix = "[Launcher]";
 var is_launched = false; // launch -> stop
@@ -56,7 +56,7 @@ function restart ()
         }
 
         // Load again the IS configuration template
-        global.integration_service_config = {systems:{}, routes:{}};
+        global.integration_service_config = {systems:{}, routes:{}, topics:{}};
 
         config_is_reset = true; // already reset for this deployment
     }
