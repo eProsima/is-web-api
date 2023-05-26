@@ -248,8 +248,6 @@ module.exports = {
      */
     add_idl_type: (idl, type_name) =>
     {
-        start_websocket();
-
         // Initialize YAML types tag only if necessary
         if (!('types' in global.integration_service_config))
         {
@@ -312,8 +310,6 @@ module.exports = {
      */
     add_ros2_type: (package_name, type_name) =>
     {
-        start_websocket();
-
         var error_msg = "";
         if (!package_name)
         {
