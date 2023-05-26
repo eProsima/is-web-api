@@ -30,8 +30,6 @@ var launcher = require('./launcher.js')
 var eventEmitter = new events.EventEmitter();
 var ws_client = null;
 
-var error_dict = {};
-
 var print_prefix = "[FIWARE Configuration]";
 
 // FIWARE set up
@@ -49,7 +47,7 @@ launcher.on((status) => {
 function restart ()
 {
     // Free all the local variables
-    error_dict = {};
+    global.error_dict = {};
 
     // Load again the IS configuration template
     launcher.restart()
@@ -153,7 +151,7 @@ function add_publisher (pub_id, topic_name, type_name)
         var error_msg = "The publisher is not connected to a type or is connected to an empty type.";
         logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name,
             "], [Type Name:", type_name, "]");
-        error_dict[pub_id] = { data: {entity: 'pub', topic: topic_name, type: type_name}, error: error_msg};
+        global.error_dict[pub_id] = {kind: "fiware", data: {entity: 'pub', topic: topic_name, type: type_name}, error: error_msg};
     }
 
     return { color: null , message: null }
@@ -205,7 +203,7 @@ function add_subscriber(sub_id, topic_name, type_name)
         var error_msg = "The subscriber is not connected to a type or is connected to an empty type.";
         logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", sub_id, "], [Topic Name:", topic_name,
             "], [Type Name:", type_name, "]");
-        error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name}, error: error_msg};
+        global.error_dict[sub_id] = {kind: "fiware", data: {entity: 'sub', topic: topic_name, type: type_name}, error: error_msg};
     }
     return { color: null , message: null }
 
@@ -246,27 +244,27 @@ module.exports = {
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
             // the pub/sub registration operation is retried
-            Object.keys(error_dict).forEach( id => {
-                if (error_dict[id]['data']['type'] == type_name)
+            Object.keys(global.error_dict).forEach( id => {
+                if (global.error_dict[id]['data']['type'] == type_name)
                 {
                     var message = null;
-                    switch(error_dict[id]['data']['entity'])
+                    switch(global.error_dict[id]['data']['entity'])
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_publisher(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
                                 
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_subscriber(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                     }
@@ -308,26 +306,26 @@ module.exports = {
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
             // the pub/sub registration operation is retried
-            Object.keys(error_dict).forEach( id => {
-                if (error_dict[id]['data']['type'] == package_name + '/' + type_name)
+            Object.keys(global.error_dict).forEach( id => {
+                if (global.error_dict[id]['data']['type'] == package_name + '/' + type_name)
                 {
                     var message = null;
-                    switch(error_dict[id]['data']['entity'])
+                    switch(global.error_dict[id]['data']['entity'])
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_publisher(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type']);
+                            message = add_subscriber(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                     }
@@ -382,18 +380,16 @@ module.exports = {
      */
     launch: (node_id) =>
     {
-        if (Object.keys(error_dict).length != 0
-            || Object.keys(global.integration_service_config['topics']).length == 0)
+        if (global.error_dict[node_id] !== undefined)
         {
-            let msg = "node errors";
-            if (error_dict[node_id] !== undefined)
-            {
-                logger.debug(print_prefix, "Error for entity", node_id , ":", error_dict[node_id]);
-                logger.error(print_prefix, error_dict[node_id]['error'], "=> TOPIC:", error_dict[node_id]['data']['topic'], ", TYPE:", error_dict[node_id]['data']['type']);
-                msg = error_dict[node_id]['error'];
-            }
+            logger.debug(print_prefix, "Error for entity", node_id , ":", global.error_dict[node_id]);
+            logger.error(print_prefix, global.error_dict[node_id]['error'], "=> TOPIC:", global.error_dict[node_id]['data']['topic'], ", TYPE:", global.error_dict[node_id]['data']['type']);
+            return { color: "red" , message: global.error_dict[node_id]['error'], event_emitter: null };
+        }
 
-            return { color: "red" , message: msg, event_emitter: null };
+        if (Object.keys(global.integration_service_config['topics']).length == 0)
+        {
+            return { color: "red" , message: "there are no associated topics", event_emitter: null };
         }
 
         return launcher.launch(node_id, eventEmitter);

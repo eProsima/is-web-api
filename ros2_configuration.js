@@ -27,16 +27,18 @@ const YAML = require('js-yaml');
 const util = require('util');
 
 var launcher = require('./launcher.js')
+var fiware = require('./fiware_configuration.js')
 
 var eventEmitter = new events.EventEmitter();
 var ws_client = null;
-
-var error_dict = {};
 
 var print_prefix = "[ROS2 Configuration]";
 
 // DDS Domain ID
 var dds_domain = 0;
+
+// Common to all configs
+global.error_dict = {};
 
 // Make eventEmitter relay launch events
 launcher.on((status) => {
@@ -49,7 +51,7 @@ launcher.on((status) => {
 function restart ()
 {
     // Free all the local variables
-    error_dict = {};
+    global.error_dict = {};
 
     // Load again the IS configuration template
     launcher.restart()
@@ -71,7 +73,7 @@ function start_websocket ()
 /**
  * @brief Prepares global.integration_service_config information for the config file
  */
-function update_yaml_config()
+function update_ros2_yaml_config()
 {
     // merge the ros2 template if necessary, note ros2 system is in both templates
     if (global.integration_service_config.systems.ws_server_for_ros2 === undefined)
@@ -139,7 +141,7 @@ function get_qos_from_props (config)
 
 function add_publisher (pub_id, topic_name, type_name, qos)
 {
-    update_yaml_config();
+    update_ros2_yaml_config();
 
     // Checks if the publisher type is registered in the type map
     if (global.integration_service_config.systems.ros2.using.includes(type_name))
@@ -186,15 +188,31 @@ function add_publisher (pub_id, topic_name, type_name, qos)
         var error_msg = "The publisher is not connected to a type or is connected to an empty type.";
         logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", pub_id, "], [Topic Name:", topic_name,
             "], [Type Name:", type_name, "] and QoS [", qos, "]");
-        error_dict[pub_id] = { data: {entity: 'pub', topic: topic_name, type: type_name, qos: qos}, error: error_msg};
+        global.error_dict[pub_id] = { kind: "ros2", data: {entity: 'pub', topic: topic_name, type: type_name, qos: qos}, error: error_msg};
     }
 
     return { color: null , message: null }
 };
 
+function retry_publisher (pub_id, entry)
+{
+    let res = null;
+
+    switch (entry.kind) {
+        case 'ros2':
+            res = add_publisher(pub_id, entry.data.topic, entry.data.type, entry.data.qos);
+            break;
+        case 'fiware':
+            res = fiware.add_publisher(pub_id, entry.data.topic, entry.data.type, entry.data.qos);
+            break;
+    };
+
+    return res;
+}
+
 function add_subscriber(sub_id, topic_name, type_name, qos)
 {
-    update_yaml_config();
+    update_ros2_yaml_config();
 
     // Checks if the subscriber id is registered in the type map
     if (global.integration_service_config.systems.ros2.using.includes(type_name))
@@ -239,9 +257,25 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
         var error_msg = "The subscriber is not connected to a type or is connected to an empty type.";
         logger.debug(print_prefix, "Error:", error_msg, "Data: [ID:", sub_id, "], [Topic Name:", topic_name,
             "], [Type Name:", type_name, "] and [QoS:", qos, "]");
-        error_dict[sub_id] = { data: {entity: 'sub', topic: topic_name, type: type_name, qos: qos}, error: error_msg};
+        global.error_dict[sub_id] = {kind: "ros2", data: {entity: 'sub', topic: topic_name, type: type_name, qos: qos}, error: error_msg};
     }
     return { color: null , message: null }
+}
+
+function retry_subscriber (pub_id, entry)
+{
+    let res = null;
+
+    switch (entry.kind) {
+        case 'ros2':
+            res = add_subscriber(pub_id, entry.data.topic, entry.data.type, entry.data.qos);
+            break;
+        case 'fiware':
+            res = fiware.add_subscriber(pub_id, entry.data.topic, entry.data.type, entry.data.qos);
+            break;
+    };
+
+    return res;
 }
 
 module.exports = {
@@ -260,7 +294,14 @@ module.exports = {
             {
                 idls: []
             };
+
         };
+
+        if (global.integration_service_config.systems.ros2 === undefined)
+        {
+            global.integration_service_config.systems.ros2 = {
+                type: ros2_dynamic, domain: 0, using: [], allow_internal: true };
+        }
 
         if (!('paths' in global.integration_service_config.types))
         {
@@ -276,28 +317,26 @@ module.exports = {
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
             // the pub/sub registration operation is retried
-            Object.keys(error_dict).forEach( id => {
-                if (error_dict[id]['data']['type'] == type_name)
+            Object.keys(global.error_dict).forEach( id => {
+                if (global.error_dict[id]['data']['type'] == type_name)
                 {
                     var message = null;
-                    switch(error_dict[id]['data']['entity'])
+                    switch(global.error_dict[id]['data']['entity'])
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = retry_publisher(id, global.error_dict[id]);
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = retry_subscriber(id, global.error_dict[id]);
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                     }
@@ -327,6 +366,12 @@ module.exports = {
             return { color: "red", message: error_msg };
         }
 
+        if (global.integration_service_config.systems.ros2 === undefined)
+        {
+            global.integration_service_config.systems.ros2 = {
+                type: ros2_dynamic, domain: 0, using: [], allow_internal: true };
+        }
+
         if (!global.integration_service_config.systems.ros2.using.includes(package_name + '/' + type_name))
         {
             global.integration_service_config.systems.ros2.using.push(package_name + '/' + type_name);
@@ -334,28 +379,26 @@ module.exports = {
 
             // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
             // the pub/sub registration operation is retried
-            Object.keys(error_dict).forEach( id => {
-                if (error_dict[id]['data']['type'] == package_name + '/' + type_name)
+            Object.keys(global.error_dict).forEach( id => {
+                if (global.error_dict[id]['data']['type'] == package_name + '/' + type_name)
                 {
                     var message = null;
-                    switch(error_dict[id]['data']['entity'])
+                    switch(global.error_dict[id]['data']['entity'])
                     {
                         case 'pub':
                             logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = retry_publisher(id, global.error_dict[id]);
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                         case 'sub':
                             logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, error_dict[id]['data']['topic'], error_dict[id]['data']['type'],
-                                error_dict[id]['data']['qos']);
+                            message = retry_subscriber(id, global.error_dict[id]);
                             if (message['message'] == null)
                             {
-                                delete error_dict[id];
+                                delete global.error_dict[id];
                             }
                             break;
                     }
@@ -401,25 +444,23 @@ module.exports = {
 
         start_websocket();
 
-        update_yaml_config();
+        update_ros2_yaml_config();
     },
     /**
      * @brief Launches a new instance of the Integration Service with the configured YAML
      */
     launch: (node_id) =>
     {
-        if (Object.keys(error_dict).length != 0
-            || Object.keys(global.integration_service_config['topics']).length == 0)
+        if (global.error_dict[node_id] !== undefined)
         {
-            let msg = "node errors";
-            if (error_dict[node_id] !== undefined)
-            {
-                logger.debug(print_prefix, "Error for entity", node_id , ":", error_dict[node_id]);
-                logger.error(print_prefix, error_dict[node_id]['error'], "=> TOPIC:", error_dict[node_id]['data']['topic'], ", TYPE:", error_dict[node_id]['data']['type']);
-                msg = error_dict[node_id]['error'];
-            }
+            logger.debug(print_prefix, "Error for entity", node_id , ":", global.error_dict[node_id]);
+            logger.error(print_prefix, global.error_dict[node_id]['error'], "=> TOPIC:", global.error_dict[node_id]['data']['topic'], ", TYPE:", global.error_dict[node_id]['data']['type']);
+            return { color: "red" , message: global.error_dict[node_id]['error'], event_emitter: null };
+        }
 
-            return { color: "red" , message: msg, event_emitter: null };
+        if (Object.keys(global.integration_service_config['topics']).length == 0)
+        {
+            return { color: "red" , message: "there are no associated topics", event_emitter: null };
         }
 
         return launcher.launch(node_id, eventEmitter);

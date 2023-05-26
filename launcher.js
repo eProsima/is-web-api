@@ -98,7 +98,6 @@ function launch(node_id, eventEmitter)
                 });
 
         logger.info(print_prefix, "Integration Service Launched");
-        return { color: "green" , message: null, event_emitter: eventEmitter }
     }
 
     return { color: "green" , message: null, event_emitter: eventEmitter }
