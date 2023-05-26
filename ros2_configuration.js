@@ -314,8 +314,6 @@ module.exports = {
     {
         start_websocket();
 
-        update_yaml_config();
-
         var error_msg = "";
         if (!package_name)
         {
