@@ -20,6 +20,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const events = require('events');
 const proc = require('process');
 const os = require('os');
 const child_process = require('child_process');
@@ -30,6 +31,7 @@ const logger = require('./logger.js');
 
 global.integration_service_config = {systems:{}, routes:{}, topics:{}};
 var IS = {}; //Integration service process
+var ISEmitter = new events.EventEmitter();
 var print_prefix = "[Launcher]";
 var is_launched = false; // launch -> stop
 var config_is_reset = true; // launch -> restart
@@ -86,13 +88,13 @@ function launch(node_id, eventEmitter)
                 {
                 var error_msg = "There is an error when launching IS:" + err.code;
                 logger.error(print_prefix, error_msg);
-                return { color: "red" , message: error_msg, event_emitter: eventEmitter }
+                ISEmitter.emit("IS-ERROR", { color: "red" , message: error_msg });
                 });
 
         IS.on('exit', function () {
                 var error_msg = 'Integration Service exited due to failure.';
                 logger.error(print_prefix, error_msg);
-                return { color: "red" , message: error_msg, event_emitter: eventEmitter }
+                ISEmitter.emit("IS-ERROR", { color: "red" , message: error_msg });
                 });
 
         logger.info(print_prefix, "Integration Service Launched");
@@ -121,5 +123,8 @@ function stop()
 module.exports = {
     restart: restart,
     launch: launch,
-    stop: stop
+    stop: stop,
+    on: (h) => {
+        ISEmitter.on("IS-ERROR", h);
+    }
 }

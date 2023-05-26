@@ -38,6 +38,11 @@ var print_prefix = "[FIWARE Configuration]";
 var fiware_host = "";
 var fiware_port = 1234;
 
+// Make eventEmitter relay launch events
+launcher.on((status) => {
+    eventEmitter.emit("IS-ERROR", status);
+});
+
 /**
  * @brief Method that restarts the configuration phase
  */
@@ -380,9 +385,15 @@ module.exports = {
         if (Object.keys(error_dict).length != 0
             || Object.keys(global.integration_service_config['topics']).length == 0)
         {
-            logger.debug(print_prefix, "Error for entity", node_id , ":", error_dict[node_id]);
-            logger.error(print_prefix, error_dict[node_id]['error'], "=> TOPIC:", error_dict[node_id]['data']['topic'], ", TYPE:", error_dict[node_id]['data']['type']);
-            return { color: "red" , message: error_dict[node_id]['error'], event_emitter: null };
+            let msg = "node errors";
+            if (error_dict[node_id] !== undefined)
+            {
+                logger.debug(print_prefix, "Error for entity", node_id , ":", error_dict[node_id]);
+                logger.error(print_prefix, error_dict[node_id]['error'], "=> TOPIC:", error_dict[node_id]['data']['topic'], ", TYPE:", error_dict[node_id]['data']['type']);
+                msg = error_dict[node_id]['error'];
+            }
+
+            return { color: "red" , message: msg, event_emitter: null };
         }
 
         return launcher.launch(node_id, eventEmitter);
