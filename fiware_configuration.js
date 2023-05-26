@@ -106,8 +106,10 @@ function add_publisher (pub_id, topic_name, type_name)
     update_yaml_config();
 
     // Checks if the publisher type is registered in the type map
-    if (global.integration_service_config.systems.ros2.using.includes(type_name)
-        || global.integration_service_config.systems.fiware.using.includes(type_name))
+    if ((global.integration_service_config.systems.ros2.using !== undefined
+         && global.integration_service_config.systems.ros2.using.includes(type_name))
+        || (global.integration_service_config.systems.fiware.using !== undefined
+         && global.integration_service_config.systems.fiware.using.includes(type_name)))
     {
         var remap = {};
         //Checks if there is another topic with the same name
@@ -158,8 +160,10 @@ function add_subscriber(sub_id, topic_name, type_name)
     update_yaml_config();
 
     // Checks if the subscriber id is registered in the type map
-    if (global.integration_service_config.systems.ros2.using.includes(type_name)
-        || global.integration_service_config.systems.fiware.using.includes(type_name))
+    if ((global.integration_service_config.systems.ros2.using !== undefined
+         && global.integration_service_config.systems.ros2.using.includes(type_name))
+        || (global.integration_service_config.systems.fiware.using !== undefined
+         && global.integration_service_config.systems.fiware.using.includes(type_name)))
     {
         var remap = {};
         //Checks if there is another topic with the same name
