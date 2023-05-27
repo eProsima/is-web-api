@@ -118,7 +118,7 @@ function add_publisher (pub_id, topic_name, type_name)
         //Checks if there is another topic with the same name
         if (Object.keys(global.integration_service_config.topics).includes(topic_name))
         {
-            if (global.integration_service_config.topics.topic_name.route === 'fiware_to_websocket')
+            if (global.integration_service_config.topics[topic_name].route === 'fiware_to_websocket')
             {
                 remap = { fiware: { topic: topic_name }};
                 topic_name = topic_name + "_pub"
@@ -172,7 +172,7 @@ function add_subscriber(sub_id, topic_name, type_name)
         //Checks if there is another topic with the same name
         if (Object.keys(global.integration_service_config.topics).includes(topic_name))
         {
-            if (global.integration_service_config.topics.topic_name.route === 'websocket_to_fiware')
+            if (global.integration_service_config.topics[topic_name].route === 'websocket_to_fiware')
             {
                 remap = { fiware: { topic: topic_name }};
                 topic_name = topic_name + "_sub"

@@ -150,7 +150,7 @@ function add_publisher (pub_id, topic_name, type_name, qos)
         //Checks if there is another topic with the same name
         if (Object.keys(global.integration_service_config.topics).includes(topic_name))
         {
-            if (global.integration_service_config.topics.topic_name.route === 'ros2_to_websocket')
+            if (global.integration_service_config.topics[topic_name].route === 'ros2_to_websocket')
             {
                 remap = { ros2: { topic: topic_name }};
                 topic_name = topic_name + "_pub"
@@ -221,7 +221,7 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
         //Checks if there is another topic with the same name
         if (Object.keys(global.integration_service_config.topics).includes(topic_name))
         {
-            if (global.integration_service_config.topics.topic_name.route === 'websocket_to_ros2')
+            if (global.integration_service_config.topics[topic_name].route === 'websocket_to_ros2')
             {
                 remap = { ros2: { topic: topic_name }};
                 topic_name = topic_name + "_sub"
