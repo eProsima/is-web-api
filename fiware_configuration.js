@@ -30,7 +30,8 @@ var launcher = require('./launcher.js')
 var eventEmitter = new events.EventEmitter();
 var ws_client = null;
 
-var print_prefix = "[FIWARE Configuration]";
+const print_prefix = "[FIWARE Configuration]";
+const topic_suffix = "_is_fiware";
 
 // FIWARE set up
 var fiware_host = "";
@@ -108,38 +109,32 @@ function add_publisher (pub_id, topic_name, type_name)
 {
     update_yaml_config();
 
+    const remap_topic_name = topic_name + topic_suffix + "_pub";
+    const remap = { fiware: { topic: topic_name }};
+
     // Checks if the publisher type is registered in the type map
     if ((global.integration_service_config.systems.ros2.using !== undefined
          && global.integration_service_config.systems.ros2.using.includes(type_name))
         || (global.integration_service_config.systems.fiware.using !== undefined
          && global.integration_service_config.systems.fiware.using.includes(type_name)))
     {
-        var remap = {};
         //Checks if there is another topic with the same name
-        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
+        if (Object.keys(global.integration_service_config.topics).includes(remap_topic_name))
         {
-            if (global.integration_service_config.topics[topic_name].route === 'fiware_to_websocket')
-            {
-                remap = { fiware: { topic: topic_name }};
-                topic_name = topic_name + "_pub"
-            }
-            else
-            {
-                var error_msg = "There is another topic with the same name"
-                logger.error(print_prefix, error_msg);
-                return { color: "red", message: error_msg };
-            }
+            var error_msg = "There is another topic with the same name"
+            logger.error(print_prefix, error_msg);
+            return { color: "red", message: error_msg };
         }
         else
         {
             var t = type_name.replace("/", "::msg::");
-            global.integration_service_config.topics[topic_name] = { type: t, route: 'websocket_to_fiware', remap };
+            global.integration_service_config.topics[remap_topic_name] = { type: t, route: 'websocket_to_fiware', remap };
 
             if(ws_client === null)
             {
                 log.error(print_prefix, "The socket connection is not established");
             }
-            ws_client.advertise_topic(topic_name, type_name);
+            ws_client.advertise_topic(remap_topic_name, type_name);
             logger.info(print_prefix, "Publication Topic", topic_name, "[", type_name, "] added to YAML");
         }
     }
@@ -162,37 +157,37 @@ function add_subscriber(sub_id, topic_name, type_name)
 {
     update_yaml_config();
 
+    const remap_topic_name = topic_name + topic_suffix + "_sub";
+    const remap = { fiware: { topic: topic_name }};
+
     // Checks if the subscriber id is registered in the type map
     if ((global.integration_service_config.systems.ros2.using !== undefined
          && global.integration_service_config.systems.ros2.using.includes(type_name))
         || (global.integration_service_config.systems.fiware.using !== undefined
          && global.integration_service_config.systems.fiware.using.includes(type_name)))
     {
-        var remap = {};
         //Checks if there is another topic with the same name
-        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
+        if (Object.keys(global.integration_service_config.topics).includes(remap_topic_name))
         {
-            if (global.integration_service_config.topics[topic_name].route === 'websocket_to_fiware')
-            {
-                remap = { fiware: { topic: topic_name }};
-                topic_name = topic_name + "_sub"
-            }
-            else
-            {
-                var error_msg = "There is another topic with the same name";
-                logger.error(print_prefix, error_msg);
-                return { color: "red", message: error_msg };
-            }
+            var error_msg = "There is another topic with the same name";
+            logger.error(print_prefix, error_msg);
+            return { color: "red", message: error_msg };
         }
 
         var t = type_name.replace("/", "::msg::");
-        global.integration_service_config.topics[topic_name] = { type: t, route: 'fiware_to_websocket', remap };
+        global.integration_service_config.topics[remap_topic_name] = { type: t, route: 'fiware_to_websocket', remap };
+
+        // Relay messages undecoraing the topics, the external user must be unaware
+        eventEmitter.on(remap_topic_name + '_data', function(msg_json)
+        {
+            eventEmitter.emit(topic_name + '_data', msg_json);
+        });
 
         if (ws_client === null)
         {
             log.error(print_prefix, "The socket connection is not established");
         }
-        ws_client.subscribe_topic(topic_name, type_name);
+        ws_client.subscribe_topic(remap_topic_name, type_name);
         logger.info(print_prefix, "Subscription Topic", topic_name, "[", type_name, "] added to YAML");
     }
     else
@@ -210,133 +205,6 @@ function add_subscriber(sub_id, topic_name, type_name)
 }
 
 module.exports = {
-
-    /**
-     * @brief Method that registers a custom IDL Type and adds it to the IS YAML configuration file
-     * @param {String} idl: String that defines the IDL Type
-     * @param {String} type_name: String that defines the name associated with the IDL Type
-     * @param {String Array} entity_ids: Array containing the ids of the nodes connected to the IDL Type
-     */
-     add_idl_type: (idl, type_name) =>
-     {
-        start_websocket();
-
-        // Initialize YAML types tag only if necessary
-        if (!('types' in global.integration_service_config))
-        {
-            global.integration_service_config.types =
-            {
-                idls: []
-            };
-        };
-
-        if (!('paths' in global.integration_service_config.types))
-        {
-            global.integration_service_config.types.paths = ["/opt/ros/foxy/share"];
-        }
-
-        // Checks that the IDL Type is not already added to the YAML
-        if (!global.integration_service_config.types.idls.includes(String(idl)))
-        {
-            global.integration_service_config.types.idls.push(String(idl));
-            global.integration_service_config.systems.fiware.using.push(type_name);
-            logger.info(print_prefix, "IDL Type [", type_name, "] added to YAML");
-
-            // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
-            // the pub/sub registration operation is retried
-            Object.keys(global.error_dict).forEach( id => {
-                if (global.error_dict[id]['data']['type'] == type_name)
-                {
-                    var message = null;
-                    switch(global.error_dict[id]['data']['entity'])
-                    {
-                        case 'pub':
-                            logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
-                                
-                            if (message['message'] == null)
-                            {
-                                delete global.error_dict[id];
-                            }
-                            break;
-                        case 'sub':
-                            logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
-                            if (message['message'] == null)
-                            {
-                                delete global.error_dict[id];
-                            }
-                            break;
-                    }
-
-                }
-            });
-        }
-
-        return { color: null , message: null }
-     },
-
-    /**
-     * @brief Function that registers the ROS2 Types that are going to be used
-     * @param {String} package_name: String that states the name of the ROS2 package selected
-     * @param {String} type_name: String that states the name of the message withint the ROS2 package that is selected
-     */
-    add_ros2_type: (package_name, type_name) =>
-    {
-        start_websocket();
-
-        update_yaml_config();
-
-        var error_msg = "";
-        if (!package_name)
-        {
-            error_msg = "The package is not selected";
-            return { color: "red", message: error_msg };
-        }
-        if (!type_name)
-        {
-            error_msg = "The message type is not selected";
-            return { color: "red", message: error_msg };
-        }
-
-        if (!global.integration_service_config.systems.ros2.using.includes(package_name + '/' + type_name))
-        {
-            global.integration_service_config.systems.ros2.using.push(package_name + '/' + type_name);
-            logger.info(print_prefix, "ROS2 Type [", package_name + '/' + type_name, "] registered");
-
-            // If there is an error on subscriber or publisher creation whose type corresponds with the one being registered
-            // the pub/sub registration operation is retried
-            Object.keys(global.error_dict).forEach( id => {
-                if (global.error_dict[id]['data']['type'] == package_name + '/' + type_name)
-                {
-                    var message = null;
-                    switch(global.error_dict[id]['data']['entity'])
-                    {
-                        case 'pub':
-                            logger.debug(print_prefix, "Publisher", id, "registration retry.");
-                            message = add_publisher(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
-                            if (message['message'] == null)
-                            {
-                                delete global.error_dict[id];
-                            }
-                            break;
-                        case 'sub':
-                            logger.debug(print_prefix, "Subscriber", id, "registration retry.");
-                            message = add_subscriber(id, global.error_dict[id]['data']['topic'], global.error_dict[id]['data']['type']);
-                            if (message['message'] == null)
-                            {
-                                delete global.error_dict[id];
-                            }
-                            break;
-                    }
-
-                }
-            });
-        }
-
-        return { color: null , message: null }
-
-    },
 
     /**
      * @brief Method that registers a publisher and adds the corresponding topic to the IS YAML configuration file
@@ -409,6 +277,7 @@ module.exports = {
         {
             ws_client.abort();
             ws_client = null;
+            eventEmitter.removeAllListeners();
         }
     },
     /**
@@ -418,7 +287,8 @@ module.exports = {
      */
     send_message: (topic, data) =>
     {
-        ws_client.send_message(topic, data);
+        const remap_topic_name = topic + topic_suffix + "_pub";
+        ws_client.send_message(remap_topic_name, data);
     },
     get_event_emitter: () =>
     {

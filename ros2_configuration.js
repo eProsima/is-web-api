@@ -32,7 +32,8 @@ var fiware = require('./fiware_configuration.js')
 var eventEmitter = new events.EventEmitter();
 var ws_client = null;
 
-var print_prefix = "[ROS2 Configuration]";
+const print_prefix = "[ROS2 Configuration]";
+const topic_suffix = "_is_ros2";
 
 // DDS Domain ID
 var dds_domain = 0;
@@ -143,42 +144,36 @@ function add_publisher (pub_id, topic_name, type_name, qos)
 {
     update_ros2_yaml_config();
 
+    const remap_topic_name = topic_name + topic_suffix + "_pub";
+    const remap = { ros2: { topic: topic_name }};
+
     // Checks if the publisher type is registered in the type map
     if (global.integration_service_config.systems.ros2.using.includes(type_name))
     {
-        var remap = {};
         //Checks if there is another topic with the same name
-        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
+        if (Object.keys(global.integration_service_config.topics).includes(remap_topic_name))
         {
-            if (global.integration_service_config.topics[topic_name].route === 'ros2_to_websocket')
-            {
-                remap = { ros2: { topic: topic_name }};
-                topic_name = topic_name + "_pub"
-            }
-            else
-            {
-                var error_msg = "There is another topic with the same name"
-                logger.error(print_prefix, error_msg);
-                return { color: "red", message: error_msg };
-            }
+            const error_msg = "There is another ros2 topic publisher with the same name"
+            logger.error(print_prefix, error_msg);
+            return { color: "red", message: error_msg };
         }
         else
         {
             var t = type_name.replace("/", "::msg::");
             if (qos.length == 0)
             {
-                global.integration_service_config.topics[topic_name] = { type: t, route: 'websocket_to_ros2', remap };
+                global.integration_service_config.topics[remap_topic_name] = { type: t, route: 'websocket_to_ros2', remap };
             }
             else
             {
-                global.integration_service_config.topics[topic_name] = {type: t, route: 'websocket_to_ros2', remap, ros2: get_qos_from_props(qos) }
+                global.integration_service_config.topics[remap_topic_name] = {type: t, route: 'websocket_to_ros2', remap, ros2: get_qos_from_props(qos) }
             }
 
             if(ws_client === null)
             {
                 log.error(print_prefix, "The socket connection is not established");
             }
-            ws_client.advertise_topic(topic_name, type_name);
+            ws_client.advertise_topic(remap_topic_name, type_name);
             logger.info(print_prefix, "Publication Topic", topic_name, "[", type_name, "] added to YAML");
         }
     }
@@ -214,42 +209,44 @@ function add_subscriber(sub_id, topic_name, type_name, qos)
 {
     update_ros2_yaml_config();
 
+    const remap_topic_name = topic_name + topic_suffix + "_sub";
+    const remap = { ros2: { topic: topic_name }};
+
     // Checks if the subscriber id is registered in the type map
     if (global.integration_service_config.systems.ros2.using.includes(type_name))
     {
-        var remap = {};
         //Checks if there is another topic with the same name
-        if (Object.keys(global.integration_service_config.topics).includes(topic_name))
+        if (Object.keys(global.integration_service_config.topics).includes(remap_topic_name))
         {
-            if (global.integration_service_config.topics[topic_name].route === 'websocket_to_ros2')
-            {
-                remap = { ros2: { topic: topic_name }};
-                topic_name = topic_name + "_sub"
-            }
-            else
-            {
-                var error_msg = "There is another topic with the same name";
-                logger.error(print_prefix, error_msg);
-                return { color: "red", message: error_msg };
-            }
-        }
-
-        var t = type_name.replace("/", "::msg::");
-        if (qos.length == 0)
-        {
-            global.integration_service_config.topics[topic_name] = { type: t, route: 'ros2_to_websocket', remap };
+            const error_msg = "There is another ros2 topic publisher with the same name";
+            logger.error(print_prefix, error_msg);
+            return { color: "red", message: error_msg };
         }
         else
         {
-            global.integration_service_config.topics[topic_name] = {type: t, route: 'ros2_to_websocket', remap, ros2: get_qos_from_props(qos) }
-        }
+            var t = type_name.replace("/", "::msg::");
+            if (qos.length == 0)
+            {
+                global.integration_service_config.topics[remap_topic_name] = { type: t, route: 'ros2_to_websocket', remap };
+            }
+            else
+            {
+                global.integration_service_config.topics[remap_topic_name] = {type: t, route: 'ros2_to_websocket', remap, ros2: get_qos_from_props(qos) }
+            }
 
-        if (ws_client === null)
-        {
-            log.error(print_prefix, "The socket connection is not established");
+            // Relay messages undecoraing the topics, the external user must be unaware
+            eventEmitter.on(remap_topic_name + '_data', function(msg_json)
+            {
+                eventEmitter.emit(topic_name + '_data', msg_json);
+            });
+
+            if (ws_client === null)
+            {
+                log.error(print_prefix, "The socket connection is not established");
+            }
+            ws_client.subscribe_topic(remap_topic_name, type_name);
+            logger.info(print_prefix, "Subscription Topic", topic_name, "[", type_name, "] added to YAML");
         }
-        ws_client.subscribe_topic(topic_name, type_name);
-        logger.info(print_prefix, "Subscription Topic", topic_name, "[", type_name, "] added to YAML");
     }
     else
     {
@@ -480,6 +477,7 @@ module.exports = {
         {
             ws_client.abort();
             ws_client = null;
+            eventEmitter.removeAllListeners();
         }
     },
     /**
@@ -489,7 +487,8 @@ module.exports = {
      */
     send_message: (topic, data) =>
     {
-        ws_client.send_message(topic, data);
+        const remap_topic_name = topic + topic_suffix + "_pub";
+        ws_client.send_message(remap_topic_name, data);
     },
     get_event_emitter: () =>
     {

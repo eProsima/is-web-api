@@ -114,6 +114,7 @@ function stop()
     {
         is_launched = false;
         child_process.exec('kill -9 ' + IS.pid, { stdio: 'inherit' });
+        logger.info(print_prefix, "Integration Service Shut down");
     }
 
     return was_launched;
