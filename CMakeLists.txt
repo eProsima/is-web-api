@@ -14,22 +14,38 @@
 
 cmake_minimum_required(VERSION 3.5)
 
-project(IS-Web-API)
-
-set(INSTALL_DIR /usr/lib)
-
-file(MAKE_DIRECTORY ${INSTALL_DIR}/${PROJECT_NAME})
-
-file(GLOB ISWAPI_RESOURCES "*.js" "*.yaml")
-foreach(resource ${ISWAPI_RESOURCES})
-
-    get_filename_component(resource_name "${resource}" NAME)
-
-    configure_file(${resource}
-        ${INSTALL_DIR}/${PROJECT_NAME}/${resource_name}
-        COPYONLY
+project(IS-Web-API
+    VERSION 0.0.2
+    DESCRIPTION "Websocket interfaces to ROS2 and FIWARE Context Broker"
     )
-    
-endforeach()
 
-execute_process(COMMAND npm install tmp colors jsonwebtoken websocket js-yaml WORKING_DIRECTORY ${INSTALL_DIR})
+string(JOIN "\n" INSTALL_SCRIPT
+    "set(sources \"${CMAKE_CURRENT_LIST_DIR}\")"
+    [=[
+    if(WIN32)
+        set(workaround_parenthesis "ProgramFiles(x86)")
+        find_program(NPM_PATH npm HINTS $ENV{ProgramFiles}/nodejs $ENV{${workaround_parenthesis}}/nodejs REQUIRED)
+        set(NPM_PATH cmd /c "${NPM_PATH}")
+    else()
+        find_program(NPM_PATH npm REQUIRED)
+    endif()
+
+    message(STATUS "Invoking npm from ${NPM_PATH}")
+    message(STATUS "${NPM_PATH} install -g ${sources}")
+    execute_process(COMMAND ${NPM_PATH} install -g ${sources}
+        RESULT_VARIABLE NPM_CD
+        ERROR_VARIABLE NPM_ERROR
+        OUTPUT_VARIABLE NPM_RES
+        WORKING_DIRECTORY /
+        )
+
+    if(NPM_CD)
+        message(STATUS "${NPM_CD}")
+        message(FATAL_ERROR "${NPM_ERROR}")
+    endif()
+
+    message(STATUS "${NPM_RES}")
+    ]=]
+    )
+
+install(CODE ${INSTALL_SCRIPT})

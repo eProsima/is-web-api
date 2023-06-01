@@ -1,0 +1,32 @@
+{
+    "name":"IS-Web-API",
+    "license":"MIT",
+    "description": "Websocket interfaces to ROS2 and FIWARE Context Broker",
+    "version": "0.0.1",
+    "engines": {
+        "node": ">=10"
+    },
+    "os" : ["!win32"],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/eProsima/IS-Web-API.git"
+    },
+    "dependencies": {
+        "js-yaml": "~4.1.0",
+        "websocket": "~1.0.34",
+        "colors": "~1.4.0",
+        "jsonwebtoken": "~9.0.0"
+    },
+    "keywords": [
+        "ros2",
+        "node-red",
+        "contrib",
+        "fiware",
+        "ngsi",
+        "eProsima",
+        "context",
+        "process",
+        "data",
+        "json" 
+    ]
+}
