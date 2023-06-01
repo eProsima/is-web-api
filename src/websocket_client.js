@@ -45,7 +45,7 @@ class WebSocketSHLink {
         this.#ws_port = Math.floor(Math.random() * 16383 + 49152);
 
         this.#init_info = [];
-        this.#client_connection = {};
+        this.#client_connection = null;
 
         // Set up events
         var retries = 0;
@@ -107,7 +107,10 @@ class WebSocketSHLink {
 
     send_message(topic, data) {
         var msg = '{"op":"publish","topic":"' + String(topic) + '","msg":' + JSON.stringify(data) + '}';
-        this.#client_connection.send(msg);
+        if (this.#client_connection)
+        {
+            this.#client_connection.send(msg);
+        }
     }
 
     advertise_topic(topic, type) {
