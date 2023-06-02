@@ -30,9 +30,11 @@ class WebSocketSHLink {
     #ws_port;
     #init_info;
     #client_connection;
+    #name;
     
-    constructor(eventEmitter, logger) {
+    constructor(eventEmitter, name, logger) {
 
+        this.#name = name;
         this.#client = new WebSocketClient({
                 tlsOptions: {
                         rejectUnauthorized: false
@@ -68,7 +70,7 @@ class WebSocketSHLink {
 
         this.#client.on('connect', function(connection) {
             logger.info('[WebSocket Client] Connected');
-            eventEmitter.emit("websocket_client_connected");
+            eventEmitter.emit(pThis.#name + "_connected");
             pThis.#client_connection = connection;
 
             // Once the websocket client is connected, the init messages are sent
@@ -142,9 +144,10 @@ module.exports = {
     /**
      * @brief Function that starts the execution of the WebSocket Client
      * @param {EventEmitter} eventEmitter: EventEmmitter used to emit and receive events between libraries
+     * @param {name} name: Name associated with the websocket
      */
-    launch_websocket_client: (eventEmitter) =>
+    launch_websocket_client: (eventEmitter, name) =>
     {
-        return new WebSocketSHLink(eventEmitter, logger);
+        return new WebSocketSHLink(eventEmitter, name, logger);
     }
 }

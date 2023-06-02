@@ -67,7 +67,7 @@ function start_websocket ()
     if (ws_client === null)
     {
         logger.info(print_prefix, "ROS2 config websocket client initialized");
-        ws_client = websocketclient.launch_websocket_client(eventEmitter);
+        ws_client = websocketclient.launch_websocket_client(eventEmitter, "ROS2");
     }
 };
 
