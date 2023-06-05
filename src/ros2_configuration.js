@@ -297,7 +297,7 @@ module.exports = {
         if (global.integration_service_config.systems.ros2 === undefined)
         {
             global.integration_service_config.systems.ros2 = {
-                type: ros2_dynamic, domain: 0, using: [], allow_internal: true };
+                type: "ros2_dynamic", domain: 0, using: [], allow_internal: true };
         }
 
         if (!('paths' in global.integration_service_config.types))
@@ -366,7 +366,7 @@ module.exports = {
         if (global.integration_service_config.systems.ros2 === undefined)
         {
             global.integration_service_config.systems.ros2 = {
-                type: ros2_dynamic, domain: 0, using: [], allow_internal: true };
+                type: "ros2_dynamic", domain: 0, using: [], allow_internal: true };
         }
 
         if (!global.integration_service_config.systems.ros2.using.includes(package_name + '/' + type_name))
