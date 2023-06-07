@@ -280,7 +280,6 @@ module.exports = {
      * @brief Method that registers a custom IDL Type and adds it to the IS YAML configuration file
      * @param {String} idl: String that defines the IDL Type
      * @param {String} type_name: String that defines the name associated with the IDL Type
-     * @param {String Array} entity_ids: Array containing the ids of the nodes connected to the IDL Type
      */
     add_idl_type: (idl, type_name) =>
     {
