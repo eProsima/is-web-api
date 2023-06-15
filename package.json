@@ -2,7 +2,7 @@
     "name":"IS-Web-API",
     "license":"MIT",
     "description": "Websocket interfaces to ROS2 and FIWARE Context Broker",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "engines": {
         "node": ">=10"
     },
@@ -27,6 +27,6 @@
         "context",
         "process",
         "data",
-        "json" 
+        "json"
     ]
 }
