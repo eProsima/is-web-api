@@ -48,25 +48,25 @@ module.exports = {
     {
       if (loggerLevel <= logLevels.error)
       {
-        console.log(colors.red("[IS-Web-API][ERROR]"), ...message);
+        console.log(colors.red("[is-web-api][ERROR]"), ...message);
       }
     },
     warn: (...message) => {
       if (loggerLevel <= logLevels.warn)
       {
-        console.log(colors.yellow("[IS-Web-API][WARNING]"), ...message);
+        console.log(colors.yellow("[is-web-api][WARNING]"), ...message);
       }
     },
     info: (...message) => {
       if (loggerLevel <= logLevels.info)
       {
-        console.log(colors.green("[IS-Web-API][INFO]"), ...message);
+        console.log(colors.green("[is-web-api][INFO]"), ...message);
       }
     },
     debug: (...message) => {
       if (loggerLevel <= logLevels.debug)
       {
-        console.log(colors.blue("[IS-Web-API][DEBUG]"), ...message);
+        console.log(colors.blue("[is-web-api][DEBUG]"), ...message);
       }
     }
   };

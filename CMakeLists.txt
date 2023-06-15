@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.5)
 
-project(IS-Web-API
+project(is-web-api
     VERSION 0.0.2
     DESCRIPTION "Websocket interfaces to ROS2 and FIWARE Context Broker"
     )

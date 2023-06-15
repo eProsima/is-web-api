@@ -1,9 +1,9 @@
-# IS-Web-API: Integration Service Web API
+# is-web-api: Integration Service Web API
 
 This project is part of [DIH^2](http://www.dih-squared.eu/). The main goal is provide WebSocket interoperability with
 [ROS2](https://docs.ros.org/) and [FIWARE](https://fiware-orion.readthedocs.io/en/master/).
 
-This library was created to service the [Node-RED ROS 2 Plugin](https://github.com/eProsima/node-red-ros2-plugin.git) 
+This library was created to service the [Node-RED ROS 2 Plugin](https://github.com/eProsima/node-red-ros2-plugin.git)
 that provides Node-RED nodes associated with ROS2 and FIWARE endpoints.
 
 ## Contents
@@ -31,7 +31,7 @@ The libray is composed of several modules:
 
 
 `logger.js`
-: This module provides common logger interface for the others. 
+: This module provides common logger interface for the others.
 
 `websocket_client.js`
 : This module provides websocket connections for each interface (ROS2/FIWARE) to the integration-service.
@@ -122,19 +122,19 @@ Once all the dependencies are available we can deploy the plugin via npm:
 + From npm repo:
 
    ```bash
-   $ npm install -g IS-Web-API
+   $ npm install -g is-web-api
    ```
 + From sources. `npm` allows direct deployment from github repo:
 
    ```bash
-   $ npm install -g https://github.com/eProsima/IS-Web-API
+   $ npm install -g https://github.com/eProsima/is-web-api
    ```
 
    Or, as in the Dockerfile, from a local sources directory. The docker favors this approach to allow tampering with the
    sources.
 
    ```bash
-   $ git clone https://github.com/eProsima/IS-Web-API.git plugin_sources
+   $ git clone https://github.com/eProsima/is-web-api.git plugin_sources
    $ npm install -g  ./plugin_sources
 
    ```
@@ -153,7 +153,7 @@ initialization order is nondeterministic. For example: Publisher and Subscribers
 They are accessible using:
 
 ```js
-    let ros_api = require('IS-Web-API').ros2;
+    let ros_api = require('is-web-api').ros2;
 ```
 
 <table>
@@ -317,7 +317,7 @@ They are accessible using:
 They are accessible using:
 
 ```js
-    let fiware = require('IS-Web-API').fiware;
+    let fiware = require('is-web-api').fiware;
 ```
 
 <table>
